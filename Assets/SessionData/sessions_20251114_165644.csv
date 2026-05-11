@@ -1,0 +1,2 @@
+﻿UserID,SessionStart,SessionEnd,TotalPlayTime(sec),SceneTransitions,CustomEvents
+1234,2025-11-14 16:56:13,2025-11-14 16:56:44,31.17,Title→Forest(16:56:20),"QRCodeScanned:1234(16:56:13); CalibrationCompleted:Offset=(0.036,-0.018,0.000)(16:56:19); ForestSceneStart:(16:56:22); BugCatcherStart:TotalBugs=8(16:56:22); GameplayStart:IntroFinished(16:56:26); TutorialStart:(16:56:26); TutorialPhase1:CatchPrompt(16:56:26); TutorialPhase3:AimingPrompt(16:56:30); TutorialPhase4:WaitForAiming(16:56:34); TutorialPhase5:WaitForGesture(16:56:42)"

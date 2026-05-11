@@ -1,0 +1,2 @@
+﻿UserID,SessionStart,SessionEnd,TotalPlayTime(sec),SceneTransitions,CustomEvents
+1234,2025-10-31 18:05:04,2025-10-31 18:05:14,9.57,Title→Forest(18:05:08),"QRCodeScanned:1234(18:05:04); CalibrationCompleted:Offset=(0.441,-0.184,0.592)(18:05:07); ForestSceneStart:(18:05:11); PathFollowerStart:TotalPathLength=130.81,MinSpeed=0.8,MaxSpeed=2(18:05:11); BugCatcherStart:TotalBugs=7(18:05:11)"
