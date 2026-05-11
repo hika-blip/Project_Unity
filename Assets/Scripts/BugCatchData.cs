@@ -7,6 +7,7 @@ using UnityEngine;
 /// </summary>
 public static class BugCatchData
 {
+    
     // 各虫の獲得状態 (true = 獲得済み, false = 未獲得)
     private static Dictionary<int, bool> caughtStatus = new Dictionary<int, bool>();
 
