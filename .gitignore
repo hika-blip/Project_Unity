@@ -6,4 +6,5 @@
 UserSettings/
 MemoryCaptures/
 
-.DS_Store
+.DS_StoreAssets/Fonts/NotoSansJP.asset
+Assets/Fonts/NotoSansJP.asset.meta

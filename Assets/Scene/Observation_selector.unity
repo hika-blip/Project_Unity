@@ -1300,7 +1300,7 @@ MonoBehaviour:
   targetCanvas: {fileID: 2147306548}
   endingButton: {fileID: 113636737}
   endingButtonImage: {fileID: 113636735}
-  endingHoverTime: 1.2
+  endingHoverTime: 0.7
   endingSceneName: Ending
   endingKey: 101
   alternativeEndingKey: 13
@@ -1309,9 +1309,9 @@ MonoBehaviour:
   endingSelectedColor: {r: 0, g: 1, b: 0, a: 1}
   showEndingProgressBar: 1
   endingProgressBarImage: {fileID: 0}
-  dwellTime: 1.5
-  movementScaleX: 6
-  movementScaleY: 10
+  dwellTime: 0.6
+  movementScaleX: 10
+  movementScaleY: 15
   smoothTime: 0.1
   invertY: 0
   invertX: 0

@@ -133,8 +133,6 @@ GameObject:
   - component: {fileID: 8412512}
   - component: {fileID: 8412511}
   - component: {fileID: 8412510}
-  - component: {fileID: 8412513}
-  - component: {fileID: 8412514}
   - component: {fileID: 8412515}
   m_Layer: 0
   m_Name: Main Camera
@@ -217,63 +215,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &8412513
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8412509}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 99c613fd869de4f3fab15b153b5cc7ed, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  udpPort: 9999
-  baseRotation: {x: 0, y: 0, z: 0, w: 0}
-  lookAtTarget: {fileID: 1002503479}
-  lookAtOffset: {x: 0, y: 0, z: 2}
-  baseDistance: 100
-  horizontalAngleRange: 60
-  verticalAngleRange: 10
-  distanceRange: 10
-  referenceDistance: 0.5
-  ellipseRadiusX: 5
-  ellipseRadiusZ: 2
-  sideViewDistanceReduction: 0
-  angleSmoothTime: 0.12
-  distanceSmoothTime: 0.15
-  showDebugGUI: 0
-  showDebugGizmos: 0
---- !u!114 &8412514
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8412509}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 430225ef06c844f10a79b8957398ed40, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  udpPort: 9999
-  baseRotation: {x: 0, y: 0, z: 0, w: 0}
-  lookAtTarget: {fileID: 1002503479}
-  lookAtOffset: {x: 0, y: 0, z: 0}
-  baseDistance: 3
-  horizontalAngleRange: 130
-  verticalAngleRange: 110
-  referenceDistance: 0.5
-  yMultiplier: 1.5
-  baseFOV: 60
-  minZoomFactor: 0.5
-  maxZoomFactor: 2
-  angleSmoothTime: 0.12
-  distanceSmoothTime: 0.15
-  fovSmoothTime: 0.15
-  showDebugGUI: 1
-  showDebugGizmos: 1
 --- !u!114 &8412515
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -808,7 +749,7 @@ RectTransform:
   m_GameObject: {fileID: 766030611}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 0.5, z: 1}
+  m_LocalScale: {x: 2, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1025440451}
@@ -845,14 +786,14 @@ RectTransform:
   m_GameObject: {fileID: 897140537}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 2.5, y: 2.5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1025440451}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 100, y: 0}
+  m_AnchoredPosition: {x: 100, y: 100}
   m_SizeDelta: {x: 50, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &897140540
@@ -1055,15 +996,15 @@ MonoBehaviour:
   udpPort: 9996
   cursorObject: {fileID: 766030614}
   targetCanvas: {fileID: 1025440452}
-  movementScaleX: 4
-  movementScaleY: 3
+  movementScaleX: 10
+  movementScaleY: 5
   smoothTime: 0.15
   invertY: 0
   invertX: 0
   targetSceneName: Observation_selector
   backButton: {fileID: 1301136181}
   buttonImage: {fileID: 1301136182}
-  hoverTimeRequired: 1
+  hoverTimeRequired: 0.3
   hitboxPadding: 10
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   hoverColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
@@ -1293,14 +1234,14 @@ RectTransform:
   m_GameObject: {fileID: 1301136180}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 2.5, y: 2.5, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1025440451}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 100, y: 0}
+  m_AnchoredPosition: {x: 100, y: 100}
   m_SizeDelta: {x: 50, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1301136182
@@ -1368,7 +1309,7 @@ RectTransform:
   m_GameObject: {fileID: 1304027621}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 2, y: 2, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1025440451}
@@ -1398,10 +1339,10 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u3046\u3054\u3044\u3066\u307F\u3088\u3046\uFF01"
+  m_text: "\u5DE6\u53F3\u306B\u3046\u3054\u3044\u3066\u307F\u3088\u3046\uFF01"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 0d0c799a5364f4666909fbd0f5bbd793, type: 2}
-  m_sharedMaterial: {fileID: 2642211560085927163, guid: 0d0c799a5364f4666909fbd0f5bbd793, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 84dcfe11c2a16408491d30d8691c19a0, type: 2}
+  m_sharedMaterial: {fileID: -5464939074057459735, guid: 84dcfe11c2a16408491d30d8691c19a0, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -1425,8 +1366,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 45
+  m_fontSizeBase: 45
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
