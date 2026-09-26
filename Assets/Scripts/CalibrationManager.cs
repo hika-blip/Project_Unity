@@ -19,9 +19,9 @@ public class CalibrationManager : MonoBehaviour
     public int calibrationFrames = 30;  // キャリブレーションに使用するフレーム数
     public float calibrationDelay = 5.0f;  // QRコード読み込み後の待機時間（秒）
 
-    [Header("UI設定")]
-    public TextMeshProUGUI statusText;
-    public TextMeshProUGUI countdownText;
+    //[Header("UI設定")]
+    //public TextMeshProUGUI statusText;
+    //public TextMeshProUGUI countdownText;
 
     // UDP受信用
     private UdpClient udpClient;
