@@ -1,2 +1,0 @@
-﻿UserID,SessionStart,SessionEnd,TotalPlayTime(sec),TutorialTime(sec),ForestStayTime(sec),ZoneSelectionCount,ZoneSelections,SceneTransitions,CustomEvents
-1232,2026-05-30 10:02:22,2026-05-30 10:03:44,81.90,0.00,74.90,0,,Title→Forest(10:02:29); Forest→Forest(10:02:32),"QRCodeScanned:1232(10:02:22); CalibrationCompleted:Offset=(0.084,-0.117,0.834)(10:02:28); ForestSceneStart:(10:02:32); GameplayStart:IntroFinished(10:02:36); TutorialManagerStart:Time=24.19(10:02:36); TutorialStart:(10:02:36); BugCatcherStart:TotalBugs=8(10:02:36)"

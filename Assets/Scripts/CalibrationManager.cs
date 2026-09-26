@@ -17,7 +17,7 @@ public class CalibrationManager : MonoBehaviour
 
     [Header("キャリブレーション設定")]
     public int calibrationFrames = 30;  // キャリブレーションに使用するフレーム数
-    public float calibrationDelay = 2.0f;  // QRコード読み込み後の待機時間（秒）
+    public float calibrationDelay = 5.0f;  // QRコード読み込み後の待機時間（秒）
 
     [Header("UI設定")]
     public TextMeshProUGUI statusText;
@@ -68,7 +68,7 @@ public class CalibrationManager : MonoBehaviour
         try
         {
             udpClient = new UdpClient(udpPort);
-            Debug.Log($"UDP受信開始: ポート{udpPort}");
+            //Debug.Log($"UDP受信開始: ポート{udpPort}");
 
             receiveThread = new Thread(new ThreadStart(ReceiveData));
             receiveThread.IsBackground = true;
@@ -80,6 +80,7 @@ public class CalibrationManager : MonoBehaviour
         }
     }
 
+    //UDPで三次元座標を取得　正規化
     void ReceiveData()
     {
         IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, udpPort);
@@ -138,10 +139,10 @@ public class CalibrationManager : MonoBehaviour
         while (elapsed < calibrationDelay)
         {
             elapsed += Time.deltaTime;
-            if (countdownText != null)
-            {
-                countdownText.text = $"{(calibrationDelay - elapsed):F1}秒";
-            }
+            // if (countdownText != null)
+            // {
+            //     countdownText.text = $"{(calibrationDelay - elapsed):F1}秒";
+            // }
             yield return null;
         }
 
@@ -169,11 +170,11 @@ public class CalibrationManager : MonoBehaviour
                 calibrationSamples.Add(position);
                 collectedFrames++;
 
-                if (countdownText != null)
-                {
-                    float progress = (float)collectedFrames / calibrationFrames * 100f;
-                    //countdownText.text = $"キャリブレーション中...\n{progress:F0}%";
-                }
+                // if (countdownText != null)
+                // {
+                //     float progress = (float)collectedFrames / calibrationFrames * 100f;
+                //     //countdownText.text = $"キャリブレーション中...\n{progress:F0}%";
+                // }
             }
 
             yield return new WaitForSeconds(0.033f); // 約30fps
@@ -192,18 +193,18 @@ public class CalibrationManager : MonoBehaviour
             IsCalibrated = true;
             Debug.Log($"キャリブレーション完了: オフセット={calibrationOffset}");
 
-            if (statusText != null)
-                //statusText.text = "キャリブレーション完了！";
-            if (countdownText != null)
-                countdownText.text = "準備完了";
+            // if (statusText != null)
+            //     //statusText.text = "キャリブレーション完了！";
+            // if (countdownText != null)
+            //     countdownText.text = "準備完了";
         }
         else
         {
             Debug.LogError("キャリブレーションデータを取得できませんでした");
-            if (statusText != null)
-                statusText.text = "キャリブレーション失敗";
-            if (countdownText != null)
-                countdownText.text = "データ受信エラー";
+            // if (statusText != null)
+            //     statusText.text = "キャリブレーション失敗";
+            // if (countdownText != null)
+            //     countdownText.text = "データ受信エラー";
         }
 
         IsCalibrating = false;
@@ -235,6 +236,7 @@ public class CalibrationManager : MonoBehaviour
         }
     }
 
+    // UDPソケットを安全に閉じる処理
     void OnApplicationQuit()
     {
         isRunning = false;

@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
+using UnityEngine.UI; 
 
 /// <summary>
 /// タイトルシーンでQRコード読み取り、キャリブレーション、シーン遷移を管理
@@ -13,16 +14,22 @@ public class TitleSceneController : MonoBehaviour
     public TextMeshProUGUI userIDInputText;
     public TextMeshProUGUI instructionText;
 
+    [Header("キャリブレーションゲージ")]
+    public Image calibrationGaugeImage;
+    public Image GaugeGuideImage;
+    public float calibrationGaugeExtraTime = 1.5f; // calibrationDelayに上乗せする秒数
+    private Coroutine gaugeCoroutine; // 実行中のゲージコルーチンを保持
+
     [Header("シーン設定")]
     public string nextSceneName = "Forest";
 
     [Header("キャリブレーション")]
     public CalibrationManager calibrationManager;
-
     // 内部状態
     private string currentInputUserID = "";
     private bool isProcessing = false;
 
+    //QRコード読み取りまで待つ
     private enum State
     {
         WaitingForQRCode,
@@ -58,7 +65,7 @@ public class TitleSceneController : MonoBehaviour
         // pキーを押したとき、QRコードの登録なしのデバッグユーザーとしてコンテンツを開始
         if (Input.GetKeyDown(KeyCode.P))
         {
-            Debug.Log("Pキーでデバッグユーザーを開始します。");
+            //Debug.Log("Pキーでデバッグユーザーを開始します。");
             StartCoroutine(OnRegistrationSuccess("debug_user"));
             return;
         }
@@ -148,7 +155,7 @@ public class TitleSceneController : MonoBehaviour
         if (isProcessing) yield break;
         isProcessing = true;
 
-        Debug.Log($"ユーザー登録成功: {userID}");
+        //Debug.Log($"ユーザー登録成功: {userID}");
 
         // UserSessionManagerにユーザー情報を登録
         if (UserSessionManager.Instance != null)
@@ -160,6 +167,11 @@ public class TitleSceneController : MonoBehaviour
         // 状態を更新
         currentState = State.Calibrating;
         UpdateUI();
+
+        // ゲージ開始（calibrationDelay + 1〜2秒かけて満タンになるように）
+        if (gaugeCoroutine != null) StopCoroutine(gaugeCoroutine);
+        float gaugeDuration = calibrationManager.calibrationDelay + calibrationGaugeExtraTime;
+        gaugeCoroutine = StartCoroutine(FillCalibrationGauge(gaugeDuration));
 
         // キャリブレーション開始
         if (calibrationManager != null)
@@ -196,6 +208,12 @@ public class TitleSceneController : MonoBehaviour
                 {
                     instructionText.text = "キャリブレーション失敗\nもう一度試してください";
                 }
+
+                // ★ 失敗時はゲージを止めて0に戻す
+                if (gaugeCoroutine != null) StopCoroutine(gaugeCoroutine);
+                if (calibrationGaugeImage != null) calibrationGaugeImage.fillAmount = 0f;
+                if (GaugeGuideImage != null) GaugeGuideImage.fillAmount = 1f;
+
 
                 currentState = State.WaitingForQRCode;
                 currentInputUserID = "";
@@ -247,7 +265,7 @@ public class TitleSceneController : MonoBehaviour
                     instructionText.text = "QRコードをスキャンしてください";
                     break;
                 case State.Calibrating:
-                    instructionText.text = "キャリブレーション中...\nまっすぐまえをみてください";
+                    instructionText.text = "まっすぐまえをみてください";
                     break;
                 case State.ReadyToStart:
                     instructionText.text = "準備完了！\nゲームを開始します...";
@@ -274,5 +292,30 @@ public class TitleSceneController : MonoBehaviour
     {
         yield return new WaitForSeconds(delay);
         UpdateUI();
+    }
+    /// <summary>
+    /// 指定した秒数かけてゲージを0→1まで満タンにする
+    /// </summary>
+    private IEnumerator FillCalibrationGauge(float duration)
+    {
+        float elapsed = 0f;
+
+        if (calibrationGaugeImage != null) calibrationGaugeImage.fillAmount = 0f;
+        if (GaugeGuideImage != null) GaugeGuideImage.fillAmount = 1f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+
+            if (calibrationGaugeImage != null)
+                calibrationGaugeImage.fillAmount = t;
+
+            yield return null;
+        }
+
+        // 念のため最後は必ず満タンにしておく
+        if (calibrationGaugeImage != null)
+            calibrationGaugeImage.fillAmount = 1f;
     }
 }
