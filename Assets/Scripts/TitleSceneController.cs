@@ -20,6 +20,13 @@ public class TitleSceneController : MonoBehaviour
     public float calibrationGaugeExtraTime = 1.5f; // calibrationDelayに上乗せする秒数
     private Coroutine gaugeCoroutine; // 実行中のゲージコルーチンを保持
 
+    [Header("Textの上下アニメーション")]
+    public float bobAmplitude = 16f;   // 上下に動く幅（px）
+    public float bobSpeed = 1.8f;        // 動く速さ
+
+    private RectTransform instructionTextRect;
+    private Vector2 instructionTextBasePos;
+
     [Header("シーン設定")]
     public string nextSceneName = "Forest";
 
@@ -46,6 +53,12 @@ public class TitleSceneController : MonoBehaviour
             calibrationManager = FindObjectOfType<CalibrationManager>();
         }
 
+        if (instructionText != null)
+        {
+            instructionTextRect = instructionText.GetComponent<RectTransform>();
+            instructionTextBasePos = instructionTextRect.anchoredPosition;
+        }
+
         UpdateUI();
     }
 
@@ -54,6 +67,12 @@ public class TitleSceneController : MonoBehaviour
         if (currentState == State.WaitingForQRCode && !isProcessing)
         {
             HandleUserIDInput();
+        }
+
+        if (instructionTextRect != null)
+        {
+            float offsetY = Mathf.Sin(Time.time * bobSpeed) * bobAmplitude;
+            instructionTextRect.anchoredPosition = instructionTextBasePos + new Vector2(0f, offsetY);
         }
     }
 

@@ -1266,7 +1266,9 @@ MonoBehaviour:
   instructionText: {fileID: 1552182629}
   calibrationGaugeImage: {fileID: 1868367766}
   GaugeGuideImage: {fileID: 814424323}
-  calibrationGaugeExtraTime: 1.5
+  calibrationGaugeExtraTime: 1.2
+  bobAmplitude: 16
+  bobSpeed: 1.8
   nextSceneName: Forest
   calibrationManager: {fileID: 1113278706}
 --- !u!4 &1907019027
