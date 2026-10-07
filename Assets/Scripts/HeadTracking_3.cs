@@ -22,6 +22,13 @@ public class HeadTracking_Polar : MonoBehaviour
     [Tooltip("キャリブレーションを使用するか")]
     public bool useCalibration = true;
 
+    [Header("座標の反転")]
+    [Tooltip("頭を右に動かしたのに視点が逆に動く場合はオンにする")]
+    public bool invertX = false;
+
+    [Tooltip("頭を上下に動かしたのに視点が逆に動く場合はオンにする")]
+    public bool invertY = false;
+
     // 基準位置・回転
     [HideInInspector]
     public Quaternion baseRotation;
@@ -310,6 +317,10 @@ public class HeadTracking_Polar : MonoBehaviour
         Vector3 pos = useCalibration
             ? calibrationManager.GetCalibratedPosition()
             : calibrationManager.GetRawPosition();
+
+        // 🔹 Inspectorの設定に合わせてX・Yを反転
+        if (invertX) pos.x = -pos.x;
+        if (invertY) pos.y = -pos.y;
 
         // スムージング
         currentNoseX = Mathf.SmoothDamp(currentNoseX, pos.x, ref velX, angleSmoothTime);

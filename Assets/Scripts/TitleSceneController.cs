@@ -281,10 +281,10 @@ public class TitleSceneController : MonoBehaviour
             switch (currentState)
             {
                 case State.WaitingForQRCode:
-                    instructionText.text = "QRコードをスキャンしてください";
+                    instructionText.text = "QRコードをわたしてね";
                     break;
                 case State.Calibrating:
-                    instructionText.text = "まっすぐまえをみてください";
+                    instructionText.text = "黄色いせんにたって\nまっすぐまえをみてください";
                     break;
                 case State.ReadyToStart:
                     instructionText.text = "準備完了！\nゲームを開始します...";

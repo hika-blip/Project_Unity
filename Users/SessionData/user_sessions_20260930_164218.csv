@@ -1,0 +1,2 @@
+﻿UserID,SessionStart,SessionEnd,TotalPlayTime(sec),TutorialTime(sec),ForestStayTime(sec),ZoneSelectionCount,ZoneSelections,SceneTransitions,CustomEvents
+1221,2026-09-30 16:42:39,2026-09-30 16:42:59,20.24,0.00,13.23,0,,Title→Forest(16:42:46); Forest→Forest(16:42:49),"QRCodeScanned:1221(16:42:39); CalibrationCompleted:Offset=(0.898,0.149,-0.350)(16:42:45); ForestSceneStart:(16:42:57)"

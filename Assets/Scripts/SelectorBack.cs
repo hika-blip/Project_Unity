@@ -1,17 +1,49 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading;
 using System.Collections;
 
+/// <summary>
+/// 手首カーソルで「戻る」エリアを選ぶ
+/// ・左右の手首のうちカメラに近い方を「有効な手」とする（InsectSelectMenuと同じ）
+/// ・有効な手と同じ側の肩を基準に、手首の位置（肩幅で割った値）でカーソルを動かす
+/// ・手を下ろしているとき（手首が肩より一定以上下）はカーソルを消し、戻る判定もしない
+/// ・カーソルが一定時間「戻る」エリアに重なっていたら、指定したシーンへ移動
+///
+/// 受信するUDP（dual_camera_gesture_udp.py）
+///   9995 左手首 "x,y,z" / 9994 右手首 "x,y,z"
+///   9992 左肩   "x,y,z" / 9991 右肩   "x,y,z"
+/// ※UDPの受信には InsectSelectMenu.cs 内の UdpFloatReceiver クラスを使う
+/// </summary>
 public class WristCursorSceneController : MonoBehaviour
 {
-    [Header("UDP Settings")]
-    [Tooltip("UDPポート番号")]
-    public int udpPort = 9996;
+    public enum HandPickMode
+    {
+        SmallerZ,      // zが小さい方（カメラに近い方）
+        CloserToZero   // |z|が0に近い方
+    }
+
+    [Header("UDPポート")]
+    public int leftWristPort = 9995;
+    public int rightWristPort = 9994;
+    public int leftShoulderPort = 9992;
+    public int rightShoulderPort = 9991;
+    [Tooltip("手首・肩のデータがこの秒数届かなければ、検出できていないとみなす")]
+    public float dataTimeout = 0.3f;
+
+    [Header("有効な手の選び方")]
+    [Tooltip("SmallerZ: カメラに近い方（zが小さい方）／CloserToZero: |z|が0に近い方")]
+    public HandPickMode handPickMode = HandPickMode.SmallerZ;
+    [Tooltip("もう片方の手の方がこれ以上カメラに近いときだけ、使う手を切り替える")]
+    public float handSwitchMargin = 0.05f;
+
+    [Header("手を下ろしている判定（値は「肩幅の何倍か」）")]
+    [Tooltip("手首が肩より肩幅のこの倍数以上下にあるときは「手を下ろしている＝操作していない」扱い")]
+    public float handDownLimit = 1.0f;
+    [Tooltip("手を下ろしているときはカーソルを非表示にする")]
+    public bool hideCursorWhenHandDown = true;
+    [Tooltip("両肩が見えていないときに使う肩幅（正規化座標）")]
+    public float defaultShoulderWidth = 0.35f;
 
     [Header("Cursor Settings")]
     [Tooltip("カーソルオブジェクトのRectTransform")]
@@ -20,22 +52,22 @@ public class WristCursorSceneController : MonoBehaviour
     [Tooltip("カーソルを表示するCanvas")]
     public Canvas targetCanvas;
 
-    [Header("Movement Settings")]
-    [Tooltip("座標のスケール調整（X軸）")]
-    public float movementScaleX = 1.0f;
-
-    [Tooltip("座標のスケール調整（Y軸）")]
-    public float movementScaleY = 1.0f;
+    [Header("カーソルの動き（値は「肩幅の何倍か」）")]
+    [Tooltip("手首を肩から肩幅のこの倍数だけ横に出すと、カーソルが画面の左右端に届く")]
+    public float reachX = 1.5f;
+    [Tooltip("手首を基準の高さから肩幅のこの倍数だけ上下させると、カーソルが画面の上下端に届く")]
+    public float reachY = 1.0f;
+    [Tooltip("手首がこの高さ（肩からの差。プラスで肩より上）のとき、カーソルが画面の上下中央に来る")]
+    public float centerHeight = 0f;
 
     [Tooltip("スムージング時間")]
     public float smoothTime = 0.1f;
 
     [Header("Coordinate Settings")]
-    [Tooltip("Y軸を反転するか")]
+    [Tooltip("手を右に出したのにカーソルが左に動く場合は切り替える")]
+    public bool invertX = true;
+    [Tooltip("手を上げたのにカーソルが下に動く場合は切り替える")]
     public bool invertY = false;
-
-    [Tooltip("X軸を反転するか")]
-    public bool invertX = false;
 
     [Header("Scene Transition Settings")]
     [Tooltip("遷移先のシーン名")]
@@ -78,18 +110,19 @@ public class WristCursorSceneController : MonoBehaviour
     public KeyCode alternativeBackKey = KeyCode.Backspace;
 
     [Header("Debug")]
-    public bool showDebugInfo = true;
+    public bool showDebugInfo = false;
 
-    // UDP受信用
-    private UdpClient udpClient;
-    private Thread receiveThread;
-    private bool isRunning = false;
-    private readonly object udpLock = new object();
+    // UDP受信
+    private UdpFloatReceiver lWristRecv, rWristRecv, lShoulderRecv, rShoulderRecv;
 
-    // 受信した手首座標（正規化済み: -1 to 1）
-    private volatile float wristX = 0f;
-    private volatile float wristY = 0f;
-    private volatile bool hasData = false;
+    // 手の状態
+    private int activeHand = -1;      // -1:なし 0:左手 1:右手
+    private float shoulderWidth;
+    private bool handOperating = false; // 有効な手を上げている（カーソル操作中）
+    private bool cursorPlaced = false;  // 一度でもカーソル位置を決めたか
+    private Vector2 handRatio;          // 肩からの手首の位置（肩幅で割った値）
+    private float downRatio;
+    private string handState = "-";
 
     // スムージング用
     private Vector2 currentPosition = Vector2.zero;
@@ -102,19 +135,17 @@ public class WristCursorSceneController : MonoBehaviour
     private bool isTransitioning = false;
     private Camera canvasCamera;
 
-    // デバッグ用
-    private int messagesReceived = 0;
-    private string lastMessage = "No data";
-
     void Start()
     {
+        shoulderWidth = defaultShoulderWidth;
+
         // カーソルの初期化
         if (cursorObject != null)
         {
             cursorObject.anchorMin = new Vector2(0.5f, 0.5f);
             cursorObject.anchorMax = new Vector2(0.5f, 0.5f);
             cursorObject.pivot = new Vector2(0.5f, 0.5f);
-            Debug.Log("WristCursorSceneController: Cursor initialized");
+            if (hideCursorWhenHandDown) cursorObject.gameObject.SetActive(false);
         }
         else
         {
@@ -149,7 +180,6 @@ public class WristCursorSceneController : MonoBehaviour
             if (targetCanvas != null && targetCanvas.renderMode == RenderMode.ScreenSpaceCamera)
             {
                 canvasCamera = targetCanvas.worldCamera;
-                Debug.Log($"WristCursorSceneController: Canvas is Screen Space - Camera mode");
             }
         }
 
@@ -160,102 +190,7 @@ public class WristCursorSceneController : MonoBehaviour
         }
 
         // UDP受信開始
-        StartUDPReceiver();
-    }
-
-    void StartUDPReceiver()
-    {
-        lock (udpLock)
-        {
-            try
-            {
-                if (udpClient != null)
-                {
-                    Debug.Log("WristCursorSceneController: Closing existing UDP client");
-                    StopUDPReceiverInternal();
-                    Thread.Sleep(150);
-                }
-
-                udpClient = new UdpClient();
-                udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ExclusiveAddressUse, false);
-                udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, udpPort));
-                udpClient.Client.ReceiveTimeout = 1000;
-
-                isRunning = true;
-                receiveThread = new Thread(ReceiveData);
-                receiveThread.IsBackground = true;
-                receiveThread.Start();
-
-                Debug.Log($"WristCursorSceneController: UDP Receiver started on port {udpPort}");
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError($"WristCursorSceneController: Failed to start UDP receiver: {e.Message}");
-
-                if (udpClient != null)
-                {
-                    try { udpClient.Close(); } catch { }
-                    udpClient = null;
-                }
-            }
-        }
-    }
-
-    void ReceiveData()
-    {
-        IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Any, 0);
-
-        while (isRunning)
-        {
-            try
-            {
-                if (udpClient != null && udpClient.Client != null)
-                {
-                    byte[] data = udpClient.Receive(ref remoteEndPoint);
-                    string text = Encoding.UTF8.GetString(data);
-
-                    string[] parts = text.Split(',');
-                    if (parts.Length == 2)
-                    {
-                        if (float.TryParse(parts[0], out float x) &&
-                            float.TryParse(parts[1], out float y))
-                        {
-                            wristX = x;
-                            wristY = y;
-                            hasData = true;
-                            messagesReceived++;
-                            lastMessage = text;
-                        }
-                    }
-                }
-                else
-                {
-                    break;
-                }
-            }
-            catch (SocketException e)
-            {
-                if (e.SocketErrorCode != SocketError.TimedOut && isRunning)
-                {
-                    Debug.LogWarning($"WristCursorSceneController UDP Socket Error: {e.Message}");
-                }
-            }
-            catch (System.ObjectDisposedException)
-            {
-                break;
-            }
-            catch (System.Exception e)
-            {
-                if (isRunning)
-                {
-                    Debug.LogWarning($"WristCursorSceneController UDP Error: {e.Message}");
-                }
-                Thread.Sleep(100);
-            }
-        }
-
-        Debug.Log("WristCursorSceneController: UDP receiver thread stopped");
+        StartReceivers();
     }
 
     void Update()
@@ -269,6 +204,9 @@ public class WristCursorSceneController : MonoBehaviour
             return;
         }
 
+        // 有効な手と、肩からの手首の位置を求める
+        UpdateHand();
+
         // カーソル位置の更新
         UpdateCursorPosition();
 
@@ -276,49 +214,141 @@ public class WristCursorSceneController : MonoBehaviour
         UpdateButtonInteraction();
     }
 
+    // ------------------------------------------------------------
+    // 有効な手の判定（InsectSelectMenuと同じ考え方）
+    // ------------------------------------------------------------
+    void UpdateHand()
+    {
+        bool lwOk = TryRead(lWristRecv, out Vector3 lw);
+        bool rwOk = TryRead(rWristRecv, out Vector3 rw);
+        bool lsOk = TryRead(lShoulderRecv, out Vector3 ls);
+        bool rsOk = TryRead(rShoulderRecv, out Vector3 rs);
+
+        // 肩幅を更新（両肩が見えているときだけ。xy平面上の距離）
+        if (lsOk && rsOk)
+        {
+            float w = Vector2.Distance(new Vector2(ls.x, ls.y), new Vector2(rs.x, rs.y));
+            if (w > 0.05f) shoulderWidth = Mathf.Lerp(shoulderWidth, w, 0.2f);
+        }
+
+        // 手首と同じ側の肩の両方が見えている手だけが候補
+        bool leftValid = lwOk && lsOk;
+        bool rightValid = rwOk && rsOk;
+
+        // 有効な手を選ぶ（カメラに近い方）
+        int candidate = -1;
+        if (leftValid && rightValid) candidate = HandScore(lw.z) <= HandScore(rw.z) ? 0 : 1;
+        else if (leftValid) candidate = 0;
+        else if (rightValid) candidate = 1;
+
+        // 両手の近さがほぼ同じときは今の手を使い続ける（パタパタ防止）
+        bool activeStillValid = (activeHand == 0 && leftValid) || (activeHand == 1 && rightValid);
+        if (activeStillValid && candidate != activeHand && candidate != -1)
+        {
+            float cur = HandScore(activeHand == 0 ? lw.z : rw.z);
+            float other = HandScore(candidate == 0 ? lw.z : rw.z);
+            if (cur - other < handSwitchMargin) candidate = activeHand;
+        }
+        activeHand = candidate;
+
+        handOperating = false;
+        if (activeHand == -1)
+        {
+            handState = "手が見えていない";
+            return;
+        }
+
+        Vector3 wrist = activeHand == 0 ? lw : rw;
+        Vector3 shoulder = activeHand == 0 ? ls : rs;
+        float width = Mathf.Max(shoulderWidth, 0.05f);
+
+        // y は上が正（Python側で変換済み）
+        downRatio = (shoulder.y - wrist.y) / width;
+        string handName = activeHand == 0 ? "左手" : "右手";
+
+        if (downRatio > handDownLimit)
+        {
+            handState = $"{handName}（下ろしている）  下:{downRatio:F2}";
+            return;
+        }
+
+        float dx = (wrist.x - shoulder.x) / width;
+        float dy = (wrist.y - shoulder.y) / width;
+        if (invertX) dx = -dx;
+        if (invertY) dy = -dy;
+
+        handRatio = new Vector2(dx, dy);
+        handOperating = true;
+        handState = $"{handName}  横:{dx:F2}  縦:{dy:F2}";
+    }
+
+    bool TryRead(UdpFloatReceiver recv, out Vector3 v)
+    {
+        v = Vector3.zero;
+        return recv != null && recv.TryGet(out v, dataTimeout);
+    }
+
+    // 小さいほど「カメラに近い」
+    float HandScore(float z)
+    {
+        return handPickMode == HandPickMode.SmallerZ ? z : Mathf.Abs(z);
+    }
+
+    // ------------------------------------------------------------
+    // カーソル
+    // ------------------------------------------------------------
     void UpdateCursorPosition()
     {
         if (cursorObject == null || targetCanvas == null) return;
 
-        if (hasData)
+        // 手を下ろしている・見えていないときはカーソルを消す
+        if (hideCursorWhenHandDown && cursorObject.gameObject.activeSelf != handOperating)
         {
-            RectTransform canvasRect = targetCanvas.GetComponent<RectTransform>();
-            float canvasWidth = canvasRect.rect.width;
-            float canvasHeight = canvasRect.rect.height;
-
-            // 正規化座標を取得
-            float normalizedX = wristX;
-            float normalizedY = wristY;
-
-            // 反転オプション
-            if (invertX) normalizedX = -normalizedX;
-            if (invertY) normalizedY = -normalizedY;
-
-            // スケール適用
-            normalizedX *= movementScaleX;
-            normalizedY *= movementScaleY;
-
-            // クランプ
-            normalizedX = Mathf.Clamp(normalizedX, -1f, 1f);
-            normalizedY = Mathf.Clamp(normalizedY, -1f, 1f);
-
-            // Canvas座標系に変換
-            targetPosition.x = normalizedX * canvasWidth * 0.5f;
-            targetPosition.y = normalizedY * canvasHeight * 0.5f;
-
-            // スムージング
-            currentPosition = Vector2.SmoothDamp(currentPosition, targetPosition, ref velocity, smoothTime);
-
-            // カーソルの位置を更新
-            cursorObject.anchoredPosition = currentPosition;
+            cursorObject.gameObject.SetActive(handOperating);
         }
+
+        if (!handOperating)
+        {
+            // カーソルを消した場合は、次に手を上げたときにその場に出し直す
+            if (hideCursorWhenHandDown) cursorPlaced = false;
+            return;
+        }
+
+        RectTransform canvasRect = targetCanvas.GetComponent<RectTransform>();
+        float canvasWidth = canvasRect.rect.width;
+        float canvasHeight = canvasRect.rect.height;
+
+        // 肩からの位置（肩幅単位）→ -1〜1 → Canvas座標
+        float nx = Mathf.Clamp(handRatio.x / Mathf.Max(reachX, 0.01f), -1f, 1f);
+        float ny = Mathf.Clamp((handRatio.y - centerHeight) / Mathf.Max(reachY, 0.01f), -1f, 1f);
+
+        targetPosition.x = nx * canvasWidth * 0.5f;
+        targetPosition.y = ny * canvasHeight * 0.5f;
+
+        // 手を上げ直した直後は、前の位置からスーッと動かずにその場に出す
+        if (!cursorPlaced)
+        {
+            currentPosition = targetPosition;
+            velocity = Vector2.zero;
+            cursorPlaced = true;
+        }
+        else
+        {
+            currentPosition = Vector2.SmoothDamp(currentPosition, targetPosition, ref velocity, smoothTime);
+        }
+
+        cursorObject.anchoredPosition = currentPosition;
     }
 
+    // ------------------------------------------------------------
+    // 戻るボタン
+    // ------------------------------------------------------------
     void UpdateButtonInteraction()
     {
         if (backButton == null || cursorObject == null) return;
 
-        bool isInside = IsPointInsideButton();
+        // 手を上げてカーソルを操作しているときだけ判定する
+        bool isInside = handOperating && IsPointInsideButton();
 
         if (isInside)
         {
@@ -330,7 +360,6 @@ public class WristCursorSceneController : MonoBehaviour
                 {
                     buttonImage.color = hoverColor;
                 }
-                Debug.Log("WristCursorSceneController: Hover started");
             }
 
             currentHoverTime += Time.deltaTime;
@@ -350,7 +379,6 @@ public class WristCursorSceneController : MonoBehaviour
             if (isHovering)
             {
                 ResetHoverState();
-                Debug.Log("WristCursorSceneController: Hover ended");
             }
         }
     }
@@ -429,6 +457,9 @@ public class WristCursorSceneController : MonoBehaviour
         }
     }
 
+    // ------------------------------------------------------------
+    // シーン遷移
+    // ------------------------------------------------------------
     IEnumerator TransitionToScene()
     {
         if (isTransitioning) yield break;
@@ -445,16 +476,11 @@ public class WristCursorSceneController : MonoBehaviour
             progressBarImage.fillAmount = 1f;
         }
 
-        Debug.Log($"WristCursorSceneController: Attempting to transition to scene '{targetSceneName}'");
-
-        // Build Settingsに登録されているシーンをすべて確認
-        Debug.Log("=== Scenes in Build Settings ===");
         int targetSceneIndex = -1;
         for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
         {
             string scenePath = SceneUtility.GetScenePathByBuildIndex(i);
             string sceneNameInBuild = System.IO.Path.GetFileNameWithoutExtension(scenePath);
-            Debug.Log($"  [{i}] {sceneNameInBuild} (Path: {scenePath})");
 
             // 大文字小文字を無視して比較
             if (sceneNameInBuild.Equals(targetSceneName, System.StringComparison.OrdinalIgnoreCase))
@@ -465,16 +491,16 @@ public class WristCursorSceneController : MonoBehaviour
 
         yield return new WaitForSeconds(0.3f);
 
-        // シーン遷移を実行
         if (targetSceneIndex >= 0)
         {
-            Debug.Log($"WristCursorSceneController: Loading scene by index {targetSceneIndex}");
+            // 次のシーンで同じポートを使えるよう、先にUDPを閉じる
+            StopReceivers();
+            Debug.Log($"WristCursorSceneController: Loading scene '{targetSceneName}' (index {targetSceneIndex})");
             SceneManager.LoadScene(targetSceneIndex);
         }
         else
         {
             Debug.LogError($"WristCursorSceneController: Scene '{targetSceneName}' not found in build settings!");
-            Debug.LogError($"Please check the scene name in the Inspector. Current value: '{targetSceneName}'");
             Debug.LogError("Make sure the scene is added to File > Build Settings > Scenes In Build");
             isTransitioning = false;
             ResetHoverState();
@@ -487,83 +513,44 @@ public class WristCursorSceneController : MonoBehaviour
         StartCoroutine(TransitionToScene());
     }
 
-    //void OnGUI()
-    //{
-    //    if (!showDebugInfo) return;
-
-    //    GUILayout.BeginArea(new Rect(10, 10, 400, 300));
-    //    GUILayout.Label("=== Wrist Cursor Scene Controller ===");
-    //    GUILayout.Label($"UDP Port: {udpPort}");
-    //    GUILayout.Label($"UDP Running: {isRunning}");
-    //    GUILayout.Label($"Has Data: {hasData}");
-    //    GUILayout.Label($"Messages Received: {messagesReceived}");
-    //    GUILayout.Label($"Last Message: {lastMessage}");
-    //    GUILayout.Label($"Raw Wrist: ({wristX:F3}, {wristY:F3})");
-    //    GUILayout.Label($"Cursor Position: ({currentPosition.x:F1}, {currentPosition.y:F1})");
-    //    GUILayout.Label("---");
-    //    GUILayout.Label($"Target Scene: {targetSceneName}");
-    //    GUILayout.Label($"Is Hovering: {isHovering}");
-    //    GUILayout.Label($"Hover Time: {currentHoverTime:F2} / {hoverTimeRequired:F2}");
-    //    GUILayout.Label($"Progress: {(currentHoverTime / hoverTimeRequired * 100f):F1}%");
-    //    GUILayout.Label($"Back Key: {backKey} or {alternativeBackKey}");
-    //    GUILayout.EndArea();
-    //}
-
-    void StopUDPReceiverInternal()
+    // ------------------------------------------------------------
+    // UDP
+    // ------------------------------------------------------------
+    void StartReceivers()
     {
-        isRunning = false;
-
-        if (receiveThread != null && receiveThread.IsAlive)
-        {
-            bool joined = receiveThread.Join(1500);
-            if (!joined)
-            {
-                Debug.LogWarning("WristCursorSceneController: UDP receiver thread did not stop in time");
-            }
-            receiveThread = null;
-        }
-
-        if (udpClient != null)
-        {
-            try
-            {
-                udpClient.Close();
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning($"WristCursorSceneController: Error closing UDP client: {e.Message}");
-            }
-            finally
-            {
-                udpClient.Dispose();
-                udpClient = null;
-            }
-        }
-
-        Debug.Log("WristCursorSceneController: UDP Receiver stopped");
+        StopReceivers();
+        lWristRecv = new UdpFloatReceiver(leftWristPort);
+        rWristRecv = new UdpFloatReceiver(rightWristPort);
+        lShoulderRecv = new UdpFloatReceiver(leftShoulderPort);
+        rShoulderRecv = new UdpFloatReceiver(rightShoulderPort);
+        lWristRecv.Start();
+        rWristRecv.Start();
+        lShoulderRecv.Start();
+        rShoulderRecv.Start();
     }
 
-    void OnDisable()
+    void StopReceivers()
     {
-        lock (udpLock)
-        {
-            StopUDPReceiverInternal();
-        }
+        lWristRecv?.Stop();
+        rWristRecv?.Stop();
+        lShoulderRecv?.Stop();
+        rShoulderRecv?.Stop();
+        lWristRecv = rWristRecv = lShoulderRecv = rShoulderRecv = null;
     }
 
-    void OnApplicationQuit()
-    {
-        lock (udpLock)
-        {
-            StopUDPReceiverInternal();
-        }
-    }
+    void OnDisable() { StopReceivers(); }
+    void OnDestroy() { StopReceivers(); }
+    void OnApplicationQuit() { StopReceivers(); }
 
-    void OnDestroy()
+    void OnGUI()
     {
-        lock (udpLock)
-        {
-            StopUDPReceiverInternal();
-        }
+        if (!showDebugInfo) return;
+        GUILayout.BeginArea(new Rect(10, 10, 480, 160));
+        GUILayout.Label("=== Wrist Cursor (Back) ===");
+        GUILayout.Label($"有効な手: {handState}");
+        GUILayout.Label($"肩幅: {shoulderWidth:F3}  下ろし判定: {handDownLimit:F2}");
+        GUILayout.Label($"カーソル: ({currentPosition.x:F0}, {currentPosition.y:F0})  操作中: {handOperating}");
+        GUILayout.Label($"戻る: {(isHovering ? $"{currentHoverTime:F1} / {hoverTimeRequired:F1}秒" : "-")}");
+        GUILayout.EndArea();
     }
 }

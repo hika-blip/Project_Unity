@@ -9,6 +9,11 @@ using UnityEngine.Video;
 /// 虫取りゲームのチュートリアル管理
 /// GameStartManager2の後、PathFollower2の前に実行される
 /// BugCatcher2の機能を利用してチュートリアルを実行
+///
+/// 【変更点】
+/// ・チュートリアル用の虫を表示した時点（Phase3）から捕獲を受け付け、
+///   どのフェーズで捕まえてもチュートリアルを完了してゲーム本編へ進む
+/// ・各フェーズの説明を音声でも再生（AudioSource + AudioClip）
 /// </summary>
 public class TutorialManager : MonoBehaviour
 {
@@ -35,6 +40,8 @@ public class TutorialManager : MonoBehaviour
     [Header("Timing Settings")]
     public float phase1DisplayTime = 3.0f; // 「捕まえてみよう」表示時間
     public float phase3DisplayTime = 7.0f; // 「右や左に動いて」表示時間
+    [Tooltip("完了メッセージを表示してからゲーム本編に移るまでの秒数")]
+    public float completeDisplayTime = 2.0f;
 
     [Header("Next Script")]
     public PathFollower3 pathFollowerScript; // PathFollower2スクリプト（型を明示）
@@ -42,6 +49,10 @@ public class TutorialManager : MonoBehaviour
 
     [Header("Game Bugs Setup")]
     public List<GameObject> gameBugs; // ゲーム本編用の虫リスト
+
+    [Header("Catch Detection")]
+    [Tooltip("チュートリアルの虫が非表示（非アクティブ）になったら捕獲されたとみなす（BugCatcher2が捕獲時に虫を消す場合の保険）")]
+    public bool detectCatchByDeactivation = true;
 
     [Header("Session Recording")]
     public bool recordTutorialData = true;
@@ -56,12 +67,31 @@ public class TutorialManager : MonoBehaviour
     public RawImage videoRawImage2; // 動画2表示用RawImage（ジェスチャーで捕まえよう）
     public VideoPlayer videoPlayer2; // 動画2のVideoPlayer
 
+    [Header("Voice Settings（音声ガイド）")]
+    [Tooltip("音声を再生するAudioSource（空欄なら自動で追加）")]
+    public AudioSource voiceSource;
+    [Tooltip("「つかまえてみよう！」")]
+    public AudioClip voicePhase1;
+    [Tooltip("「みぎやひだりにうごいて！」")]
+    public AudioClip voicePhase3;
+    [Tooltip("「むしをまんなかに！」")]
+    public AudioClip voicePhase4;
+    [Tooltip("「ジェスチャーでつかまえよう！」")]
+    public AudioClip voicePhase5;
+    [Tooltip("「できた！ゲームスタート！」")]
+    public AudioClip voiceComplete;
+    [Range(0f, 1f)] public float voiceVolume = 1.0f;
+    [Tooltip("音声が表示時間より長い場合、音声が終わるまで次のフェーズに進まない")]
+    public bool waitForVoiceToFinish = true;
+    [Tooltip("Phase4・5で待っている間、この秒数ごとに同じ音声をくり返す（0でくり返さない）")]
+    public float voiceRepeatInterval = 8.0f;
+
     // チュートリアルの状態
     private enum TutorialPhase
     {
-        Phase1_CatchPrompt,      // 「捕まえてみよう」表示
+        Phase1_CatchPrompt,      //「捕まえてみよう」表示
         Phase2_HideText,         // テキスト非表示、イラスト再表示
-        Phase3_AimingPrompt,     // 「右や左に動いて」表示
+        Phase3_AimingPrompt,     //「右や左に動いて」表示
         Phase4_WaitForAiming,    // ターゲット位置合わせ待ち
         Phase5_WaitForGesture,   // ジェスチャー待ち
         Completed                // チュートリアル完了
@@ -69,9 +99,15 @@ public class TutorialManager : MonoBehaviour
 
     private TutorialPhase currentPhase = TutorialPhase.Phase1_CatchPrompt;
     private float phaseStartTime;
+    private float phaseMinDuration;   // 音声の長さを考慮したそのフェーズの最低表示時間
     private float targetingTime = 0f; // ターゲットを捉えている時間
     private float tutorialStartTime;
-    private int initialBugsCaughtCount = 0; // チュートリアル開始時の捕獲数
+    private int initialBugsCaughtCount = 0; // 捕獲受付開始時の捕獲数
+    private bool catchWatchActive = false;  // 捕獲の監視中か
+    private float nextVoiceRepeatTime = -1f;
+    private AudioClip repeatingClip;
+    private Coroutine phase3WaitCoroutine;
+    private Coroutine video2Coroutine;
 
     void Start()
     {
@@ -80,25 +116,34 @@ public class TutorialManager : MonoBehaviour
         if (mainCamera == null)
             mainCamera = Camera.main;
 
-        // PathFollowerを明示的に無効化（チュートリアル中は動かない）
-        if (pathFollowerScript != null)
+        // 音声用AudioSourceの準備
+        if (voiceSource == null)
         {
-            pathFollowerScript.enabled = false;
-            // pauseMovementもtrueに設定して確実に停止
-            pathFollowerScript.pauseMovement = true;
-            Debug.Log("TutorialManager: PathFollower3 を無効化しました");
+            voiceSource = gameObject.AddComponent<AudioSource>();
         }
-        else
-        {
-            Debug.LogWarning("TutorialManager: PathFollower3スクリプトが設定されていません");
-        }
+        voiceSource.playOnAwake = false;
+        voiceSource.loop = false;
+        voiceSource.spatialBlend = 0f; // 2D音声（画面のどこからでも同じ音量）
 
-        // BugCatcher2を一時的に無効化（Phase5まで）
-        //if (BugCatcherScript != null)
-        //{
-        //    BugCatcherScript.enabled = false;
-        //    Debug.Log("TutorialManager: BugCatcher2 を無効化しました");
-        //}
+        // PathFollowerの停止
+        // if (pathFollowerScript != null)
+        // {
+        //     pathFollowerScript.enabled = false;
+        //     // pauseMovementもtrueに設定して確実に停止
+        //     pathFollowerScript.pauseMovement = true;
+        //     // Debug.Log("TutorialManager: PathFollower3 を無効化しました");
+        // }
+        // else
+        // {
+        //     Debug.LogWarning("TutorialManager: PathFollower3スクリプトが設定されていません");
+        // }
+
+        // BugCatcher2をPhase3まで無効化（Phase3開始時にBeginCatchWatch()で有効化）
+        // if (BugCatcherScript != null)
+        // {
+        //     BugCatcherScript.enabled = false;
+        //     Debug.Log("TutorialManager: BugCatcher2 を無効化しました（Phase3で有効化）");
+        // }
 
         // チュートリアル用の虫を配置・リセット
         if (tutorialBug != null)
@@ -113,7 +158,7 @@ public class TutorialManager : MonoBehaviour
         }
 
         // テキストに縁取りを適用
-        ApplyOutline(tutorialText);
+        // ApplyOutline(tutorialText);
 
         // 動画を初期化（全て非表示）
         HideAllVideos();
@@ -129,8 +174,69 @@ public class TutorialManager : MonoBehaviour
         StartPhase1();
     }
 
+    // ------------------------------------------------------------
+    // 音声
+    // ------------------------------------------------------------
+
+    /// <summary>音声を再生（前の音声は止める）。再生した音声の長さを返す</summary>
+    float PlayVoice(AudioClip clip)
+    {
+        if (voiceSource == null) return 0f;
+
+        voiceSource.Stop();
+        if (clip == null) return 0f;
+
+        voiceSource.clip = clip;
+        voiceSource.volume = voiceVolume;
+        voiceSource.Play();
+        return clip.length;
+    }
+
+    /// <summary>待っている間に音声をくり返すよう設定</summary>
+    void SetRepeatingVoice(AudioClip clip)
+    {
+        repeatingClip = clip;
+        if (clip != null && voiceRepeatInterval > 0f)
+            nextVoiceRepeatTime = Time.time + clip.length + voiceRepeatInterval;
+        else
+            nextVoiceRepeatTime = -1f;
+    }
+
+    void UpdateRepeatingVoice()
+    {
+        if (repeatingClip == null || nextVoiceRepeatTime < 0f) return;
+        if (voiceSource != null && voiceSource.isPlaying) return;
+
+        if (Time.time >= nextVoiceRepeatTime)
+        {
+            PlayVoice(repeatingClip);
+            nextVoiceRepeatTime = Time.time + repeatingClip.length + voiceRepeatInterval;
+        }
+    }
+
+    void StopVoice()
+    {
+        repeatingClip = null;
+        nextVoiceRepeatTime = -1f;
+        if (voiceSource != null) voiceSource.Stop();
+    }
+
+    /// <summary>表示時間と音声の長さのうち長い方を、そのフェーズの最低表示時間にする</summary>
+    float MinDuration(float displayTime, float voiceLength)
+    {
+        return waitForVoiceToFinish ? Mathf.Max(displayTime, voiceLength) : displayTime;
+    }
+
+    // ------------------------------------------------------------
+    // 動画
+    // ------------------------------------------------------------
     void HideAllVideos()
     {
+        if (video2Coroutine != null)
+        {
+            StopCoroutine(video2Coroutine);
+            video2Coroutine = null;
+        }
         if (videoRawImage1 != null)
         {
             videoRawImage1.gameObject.SetActive(false);
@@ -157,12 +263,10 @@ public class TutorialManager : MonoBehaviour
         if (videoRawImage2 != null)
         {
             videoRawImage2.gameObject.SetActive(false);
-            Debug.Log("ShowVideo1: 動画2を非表示にしました");
         }
         if (videoPlayer2 != null)
         {
             videoPlayer2.Stop();
-            Debug.Log("ShowVideo1: 動画2を停止しました");
         }
 
         // 動画1を表示・再生
@@ -186,16 +290,15 @@ public class TutorialManager : MonoBehaviour
         if (videoRawImage1 != null)
         {
             videoRawImage1.gameObject.SetActive(false);
-            Debug.Log("ShowVideo2: 動画1を非表示にしました");
         }
         if (videoPlayer1 != null)
         {
             videoPlayer1.Stop();
-            Debug.Log("ShowVideo2: 動画1を停止しました");
         }
 
         // 少し待ってから動画2を再生（確実に切り替わるように）
-        StartCoroutine(PlayVideo2AfterDelay());
+        if (video2Coroutine != null) StopCoroutine(video2Coroutine);
+        video2Coroutine = StartCoroutine(PlayVideo2AfterDelay());
     }
 
     IEnumerator PlayVideo2AfterDelay()
@@ -213,23 +316,37 @@ public class TutorialManager : MonoBehaviour
         {
             Debug.LogWarning($"ShowVideo2: 動画2の設定が不完全です - RawImage={videoRawImage2 != null}, VideoPlayer={videoPlayer2 != null}");
         }
+        video2Coroutine = null;
     }
 
-    void ApplyOutline(TextMeshProUGUI textComponent)
-    {
-        if (textComponent != null)
-        {
-            textComponent.outlineWidth = outlineWidth;
-            textComponent.outlineColor = outlineColor;
-        }
-    }
+    // void ApplyOutline(TextMeshProUGUI textComponent)
+    // {
+    //     if (textComponent != null)
+    //     {
+    //         textComponent.outlineWidth = outlineWidth;
+    //         textComponent.outlineColor = outlineColor;
+    //     }
+    // }
 
+    // ------------------------------------------------------------
+    // 更新
+    // ------------------------------------------------------------
     void Update()
     {
+        if (currentPhase == TutorialPhase.Completed) return;
+
         // ESCキーでチュートリアルスキップ
-        if (allowSkip && Input.GetKeyDown(skipKey) && currentPhase != TutorialPhase.Completed)
+        if (allowSkip && Input.GetKeyDown(skipKey))
         {
             SkipTutorial();
+            return;
+        }
+
+        // ★ どのフェーズでも、チュートリアルの虫を捕まえたら完了
+        if (IsTutorialBugCaught())
+        {
+            Debug.Log($"チュートリアルの虫が捕獲されました！（{currentPhase}）");
+            CompleteTutorial();
             return;
         }
 
@@ -253,6 +370,56 @@ public class TutorialManager : MonoBehaviour
         }
     }
 
+    // ------------------------------------------------------------
+    // 捕獲の受付・判定
+    // ------------------------------------------------------------
+
+    /// <summary>
+    /// チュートリアルの虫を捕まえられる状態にする（虫を表示した時点で1回だけ呼ぶ）
+    /// </summary>
+    void BeginCatchWatch()
+    {
+        if (catchWatchActive) return;
+
+        if (BugCatcherScript != null)
+        {
+            // リストをクリアして、チュートリアルの虫だけを追加
+            BugCatcherScript.bugs.Clear();
+            if (tutorialBug != null) BugCatcherScript.bugs.Add(tutorialBug);
+
+            // BugCatchDataを初期化（チュートリアルの虫1匹分）
+            BugCatchData.Initialize(1);
+
+            // BugCatcher2を有効化
+            BugCatcherScript.enabled = true;
+        }
+
+        // 捕獲受付開始時の捕獲数を記録（この時点では0のはず）
+        initialBugsCaughtCount = BugCatchData.GetCaughtCount();
+        catchWatchActive = true;
+
+        Debug.Log($"TutorialManager: チュートリアルの虫の捕獲受付を開始しました (初期捕獲数: {initialBugsCaughtCount})");
+    }
+
+    /// <summary>チュートリアルの虫が捕まったか</summary>
+    bool IsTutorialBugCaught()
+    {
+        if (!catchWatchActive) return false;
+
+        // BugCatcher2の捕獲数が増えた
+        if (BugCatchData.GetCaughtCount() > initialBugsCaughtCount)
+            return true;
+
+        // 表示していたはずの虫が消えた（BugCatcher2が捕獲時に非表示にした）
+        if (detectCatchByDeactivation && tutorialBug != null && !tutorialBug.activeSelf)
+            return true;
+
+        return false;
+    }
+
+    // ------------------------------------------------------------
+    // スキップ
+    // ------------------------------------------------------------
     void SkipTutorial()
     {
         Debug.Log("Tutorial skipped by user (ESC key)");
@@ -267,39 +434,19 @@ public class TutorialManager : MonoBehaviour
             );
         }
 
+        currentPhase = TutorialPhase.Completed;
+        catchWatchActive = false;
+        StopPendingCoroutines();
+        StopVoice();
+
         // チュートリアルの虫を非表示
         if (tutorialBug != null)
         {
             tutorialBug.SetActive(false);
         }
 
-        // BugCatcher2を有効化（まだの場合）
-        //if (BugCatcherScript != null && !BugCatcherScript.enabled)
-        //{
-        //    BugCatcherScript.enabled = true;
-
-            // チュートリアルの虫をリストから削除（追加されている場合）
-            if (BugCatcherScript.bugs.Contains(tutorialBug))
-            {
-                BugCatcherScript.bugs.Remove(tutorialBug);
-            }
-
-            // ゲーム本編用の虫を設定
-            BugCatcherScript.bugs.Clear();
-            if (gameBugs != null && gameBugs.Count > 0)
-            {
-                foreach (GameObject bug in gameBugs)
-                {
-                    if (bug != null)
-                    {
-                        BugCatcherScript.bugs.Add(bug);
-                        bug.SetActive(true);
-                    }
-                }
-                BugCatchData.Initialize(BugCatcherScript.bugs.Count);
-                Debug.Log($"TutorialManager(Skip): ゲーム本編用の虫を設定しました（{BugCatcherScript.bugs.Count}匹）");
-            }
-        //}
+        // ゲーム本編用の虫を設定
+        SetupMainGameBugs();
 
         // すぐにゲーム本編へ
         StartCoroutine(StartMainGameImmediate());
@@ -318,28 +465,17 @@ public class TutorialManager : MonoBehaviour
 
         yield return null; // 1フレーム待つ
 
-        // PathFollowerを有効化
-        if (pathFollowerScript != null)
-        {
-            pathFollowerScript.enabled = true;
-            pathFollowerScript.pauseMovement = false;
-            Debug.Log("TutorialManager: PathFollower3 を有効化しました（スキップ）");
-
-            // セッション記録: PathFollower開始時刻を記録
-            if (recordTutorialData && UserSessionManager.Instance != null)
-            {
-                UserSessionManager.Instance.RecordTutorialEnd();
-            }
-        }
+        StartPathFollower("スキップ");
 
         // このスクリプトを無効化
-        currentPhase = TutorialPhase.Completed;
         this.enabled = false;
 
         Debug.Log("Main game started (skipped)!");
     }
 
+    // ------------------------------------------------------------
     // Phase1: 「捕まえてみよう」表示
+    // ------------------------------------------------------------
     void StartPhase1()
     {
         currentPhase = TutorialPhase.Phase1_CatchPrompt;
@@ -352,28 +488,28 @@ public class TutorialManager : MonoBehaviour
         }
 
         // イラストを非表示
-        if (targetIllustration != null)
-        {
-            targetIllustration.gameObject.SetActive(false);
-        }
+        // if (targetIllustration != null)
+        // {
+        //     targetIllustration.gameObject.SetActive(false);
+        // }
 
-        //if (recordTutorialData && UserSessionManager.Instance != null)
-        //{
-        //    UserSessionManager.Instance.RecordCustomEvent("TutorialPhase1", "CatchPrompt");
-        //}
+        float voiceLength = PlayVoice(voicePhase1);
+        phaseMinDuration = MinDuration(phase1DisplayTime, voiceLength);
 
         Debug.Log("Tutorial Phase 1: つかまえてみよう");
     }
 
     void UpdatePhase1()
     {
-        if (Time.time - phaseStartTime >= phase1DisplayTime)
+        if (Time.time - phaseStartTime >= phaseMinDuration)
         {
             StartPhase2();
         }
     }
 
+    // ------------------------------------------------------------
     // Phase2: テキスト消去、イラスト再表示
+    // ------------------------------------------------------------
     void StartPhase2()
     {
         currentPhase = TutorialPhase.Phase2_HideText;
@@ -392,8 +528,8 @@ public class TutorialManager : MonoBehaviour
 
         Debug.Log("Tutorial Phase 2: Text hidden, Illustration shown");
 
-        // すぐにPhase3へ
-        StartCoroutine(WaitAndStartPhase3());
+        // 1秒後にPhase3へ
+        phase3WaitCoroutine = StartCoroutine(WaitAndStartPhase3());
     }
 
     void UpdatePhase2()
@@ -404,10 +540,18 @@ public class TutorialManager : MonoBehaviour
     IEnumerator WaitAndStartPhase3()
     {
         yield return new WaitForSeconds(1.0f);
-        StartPhase3();
+        phase3WaitCoroutine = null;
+
+        // 待っている間に完了・スキップされていたら何もしない
+        if (currentPhase == TutorialPhase.Phase2_HideText)
+        {
+            StartPhase3();
+        }
     }
 
+    // ------------------------------------------------------------
     // Phase3: 「右や左に動いて」表示
+    // ------------------------------------------------------------
     void StartPhase3()
     {
         currentPhase = TutorialPhase.Phase3_AimingPrompt;
@@ -425,26 +569,29 @@ public class TutorialManager : MonoBehaviour
             tutorialBug.SetActive(true);
         }
 
+        // ★ 虫が見えた時点から捕獲を受け付ける
+        BeginCatchWatch();
+
         // 動画1を表示・再生
         ShowVideo1();
 
-        //if (recordTutorialData && UserSessionManager.Instance != null)
-        //{
-        //    UserSessionManager.Instance.RecordCustomEvent("TutorialPhase3", "AimingPrompt");
-        //}
+        float voiceLength = PlayVoice(voicePhase3);
+        phaseMinDuration = MinDuration(phase3DisplayTime, voiceLength);
 
         Debug.Log("Tutorial Phase 3: 右や左に動いて");
     }
 
     void UpdatePhase3()
     {
-        if (Time.time - phaseStartTime >= phase3DisplayTime)
+        if (Time.time - phaseStartTime >= phaseMinDuration)
         {
             StartPhase4();
         }
     }
 
+    // ------------------------------------------------------------
     // Phase4: ターゲット位置合わせ待ち
+    // ------------------------------------------------------------
     void StartPhase4()
     {
         currentPhase = TutorialPhase.Phase4_WaitForAiming;
@@ -452,40 +599,30 @@ public class TutorialManager : MonoBehaviour
 
         if (tutorialText != null)
         {
-            tutorialText.text = " むしをまんなかに！";
+            tutorialText.text = "むしをまんなかに！";
         }
 
         targetingTime = 0f;
 
         // 動画1を継続表示（Phase3から継続）
-        // すでに表示されているのでそのまま
 
-        //if (recordTutorialData && UserSessionManager.Instance != null)
-        //{
-        //    UserSessionManager.Instance.RecordCustomEvent("TutorialPhase4", "WaitForAiming");
-        //}
+        PlayVoice(voicePhase4);
+        SetRepeatingVoice(voicePhase4);
 
         Debug.Log("Tutorial Phase 4: Waiting for aiming");
     }
 
     void UpdatePhase4()
     {
+        UpdateRepeatingVoice();
+
         if (tutorialBug == null || mainCamera == null)
             return;
 
         // 虫が画面中央にいるかチェック
-        bool isInCenter = IsBugInCenter();
-
-        if (isInCenter)
+        if (IsBugInCenter())
         {
             targetingTime += Time.deltaTime;
-
-            // 進捗表示（オプション）
-            if (tutorialText != null)
-            {
-                float progress = targetingTime / detectionTime;
-                tutorialText.text = "むしをまんなかに！";
-            }
 
             // 一定時間ターゲットを捉え続けたら次へ
             if (targetingTime >= detectionTime)
@@ -497,10 +634,6 @@ public class TutorialManager : MonoBehaviour
         {
             // ターゲットを外したらリセット
             targetingTime = 0f;
-            if (tutorialText != null)
-            {
-                tutorialText.text = "むしをまんなかに！";
-            }
         }
     }
 
@@ -529,7 +662,9 @@ public class TutorialManager : MonoBehaviour
         return distanceFromCenter < targetCenterThreshold;
     }
 
+    // ------------------------------------------------------------
     // Phase5: ジェスチャー待ち（BugCatcher2が捕獲を検出）
+    // ------------------------------------------------------------
     void StartPhase5()
     {
         currentPhase = TutorialPhase.Phase5_WaitForGesture;
@@ -537,64 +672,42 @@ public class TutorialManager : MonoBehaviour
 
         ShowVideo2();
 
-        // チュートリアル用の虫を再度有効化（念のため）
-        if (tutorialBug != null)
-        {
-            tutorialBug.SetActive(true);
-        }
-
-        // BugCatcher2のbugsリストにチュートリアルの虫を設定
-        if (BugCatcherScript != null)
-        {
-            // リストをクリアして、チュートリアルの虫だけを追加
-            BugCatcherScript.bugs.Clear();
-            BugCatcherScript.bugs.Add(tutorialBug);
-
-            // BugCatchDataを再初期化（チュートリアルの虫1匹分）
-            BugCatchData.Initialize(1);
-
-            // 初期捕獲数を記録（この時点では0のはず）
-            initialBugsCaughtCount = BugCatchData.GetCaughtCount();
-
-            // BugCatcher2を有効化
-            BugCatcherScript.enabled = true;
-
-            Debug.Log($"TutorialManager: BugCatcher2 を有効化しました (初期捕獲数: {initialBugsCaughtCount})");
-        }
+        // ★ 捕獲の受付はPhase3で開始済み。
+        //   ここでBugCatchDataを初期化し直すと、それまでの捕獲が消えてしまうので行わない。
+        BeginCatchWatch(); // 念のため（開始済みなら何もしない）
 
         if (tutorialText != null)
         {
             tutorialText.text = "ジェスチャーでつかまえよう！";
         }
 
-        //if (recordTutorialData && UserSessionManager.Instance != null)
-        //{
-        //    UserSessionManager.Instance.RecordCustomEvent("TutorialPhase5", "WaitForGesture");
-        //}
+        PlayVoice(voicePhase5);
+        SetRepeatingVoice(voicePhase5);
 
         Debug.Log("Tutorial Phase 5: Waiting for gesture (BugCatcher2 will handle)");
     }
 
     void UpdatePhase5()
     {
-        // BugCatcher2が虫を捕獲したかチェック
-        int currentCaughtCount = BugCatchData.GetCaughtCount();
-
-        Debug.Log($"UpdatePhase5: 現在の捕獲数={currentCaughtCount}, 初期捕獲数={initialBugsCaughtCount}");
-
-        if (currentCaughtCount > initialBugsCaughtCount)
-        {
-            // チュートリアルの虫が捕まった
-            Debug.Log("チュートリアルの虫が捕獲されました！");
-            CompleteTutorial();
-        }
+        UpdateRepeatingVoice();
+        // 捕獲の判定はUpdate()の先頭（IsTutorialBugCaught）でどのフェーズでも行う
     }
 
+    // ------------------------------------------------------------
+    // 完了
+    // ------------------------------------------------------------
     void CompleteTutorial()
     {
+        if (currentPhase == TutorialPhase.Completed) return;
+
+        TutorialPhase completedAt = currentPhase;
         currentPhase = TutorialPhase.Completed;
+        catchWatchActive = false;
 
         Debug.Log("Tutorial Completed!");
+
+        // 途中のフェーズ切り替えや動画の再生予約を止める
+        StopPendingCoroutines();
 
         // 全ての動画を非表示
         HideAllVideos();
@@ -602,8 +715,14 @@ public class TutorialManager : MonoBehaviour
         // テキストを更新
         if (tutorialText != null)
         {
+            tutorialText.gameObject.SetActive(true);
             tutorialText.text = "できた！ゲームスタート！";
         }
+
+        // 完了の音声（それまでの音声は止める）
+        repeatingClip = null;
+        nextVoiceRepeatTime = -1f;
+        float voiceLength = PlayVoice(voiceComplete);
 
         // セッション記録
         if (recordTutorialData && UserSessionManager.Instance != null)
@@ -611,17 +730,17 @@ public class TutorialManager : MonoBehaviour
             float tutorialTime = Time.time - tutorialStartTime;
             UserSessionManager.Instance.RecordCustomEvent(
                 "TutorialComplete",
-                $"Time={tutorialTime:F2}s"
+                $"Time={tutorialTime:F2}s,CaughtAt={completedAt}"
             );
         }
 
-        // 2秒後にゲーム本編へ
-        StartCoroutine(StartMainGame());
+        // 完了メッセージを表示してからゲーム本編へ
+        StartCoroutine(StartMainGame(MinDuration(completeDisplayTime, voiceLength)));
     }
 
-    IEnumerator StartMainGame()
+    IEnumerator StartMainGame(float waitTime)
     {
-        yield return new WaitForSeconds(2.0f);
+        yield return new WaitForSeconds(waitTime);
 
         // UIを非表示
         if (tutorialText != null)
@@ -630,47 +749,10 @@ public class TutorialManager : MonoBehaviour
             targetIllustration.gameObject.SetActive(true);
 
         // BugCatcher2にゲーム本編用の虫を設定
-        if (BugCatcherScript != null)
-        {
-            // チュートリアルの虫をリストから削除
-            BugCatcherScript.bugs.Clear();
-
-            // ゲーム本編用の虫をリストに追加
-            if (gameBugs != null && gameBugs.Count > 0)
-            {
-                foreach (GameObject bug in gameBugs)
-                {
-                    if (bug != null)
-                    {
-                        BugCatcherScript.bugs.Add(bug);
-                        bug.SetActive(true); // 虫を表示
-                    }
-                }
-
-                // BugCatchDataを再初期化（ゲーム本編用の虫の数で）
-                BugCatchData.Initialize(BugCatcherScript.bugs.Count);
-
-                Debug.Log($"TutorialManager: ゲーム本編用の虫を設定しました（{BugCatcherScript.bugs.Count}匹）");
-            }
-            else
-            {
-                Debug.LogWarning("TutorialManager: gameBugsが設定されていません！");
-            }
-        }
+        SetupMainGameBugs();
 
         // PathFollowerを有効化（ここでようやく自動歩行開始）
-        if (pathFollowerScript != null)
-        {
-            pathFollowerScript.enabled = true;
-            pathFollowerScript.pauseMovement = false; // 移動を許可
-            Debug.Log("TutorialManager: PathFollower3 を有効化しました - 自動歩行開始");
-
-            // セッション記録: PathFollower開始時刻を記録
-            if (recordTutorialData && UserSessionManager.Instance != null)
-            {
-                UserSessionManager.Instance.RecordTutorialEnd();
-            }
-        }
+        StartPathFollower("自動歩行開始");
 
         // このスクリプトを無効化
         this.enabled = false;
@@ -678,26 +760,78 @@ public class TutorialManager : MonoBehaviour
         Debug.Log("Main game started! PathFollower and BugCatcher are now active.");
     }
 
-    //void OnGUI()
-    //{
-    //    GUILayout.BeginArea(new Rect(10, 10, 300, 300));
-    //    GUILayout.Label("=== Tutorial Debug ===");
-    //    GUILayout.Label($"Phase: {currentPhase}");
-    //    GUILayout.Label($"Targeting Time: {targetingTime:F2} / {detectionTime:F2}");
+    // ------------------------------------------------------------
+    // 共通処理
+    // ------------------------------------------------------------
 
-    //    if (tutorialBug != null && mainCamera != null)
-    //    {
-    //        bool inCenter = IsBugInCenter();
-    //        GUILayout.Label($"Bug in Center: {inCenter}");
-    //    }
+    /// <summary>BugCatcher2にゲーム本編用の虫を設定</summary>
+    void SetupMainGameBugs()
+    {
+        if (BugCatcherScript == null)
+        {
+            Debug.LogWarning("TutorialManager: BugCatcher2が設定されていません");
+            return;
+        }
 
-    //    if (allowSkip)
-    //    {
-    //        GUILayout.Label($"Press {skipKey} to skip tutorial");
-    //    }
+        // チュートリアルの虫をリストから削除
+        BugCatcherScript.bugs.Clear();
 
-    //    GUILayout.EndArea();
-    //}
+        // ゲーム本編用の虫をリストに追加
+        if (gameBugs != null && gameBugs.Count > 0)
+        {
+            foreach (GameObject bug in gameBugs)
+            {
+                if (bug != null)
+                {
+                    BugCatcherScript.bugs.Add(bug);
+                    bug.SetActive(true); // 虫を表示
+                }
+            }
+
+            // BugCatchDataを再初期化（ゲーム本編用の虫の数で）
+            BugCatchData.Initialize(BugCatcherScript.bugs.Count);
+
+            Debug.Log($"TutorialManager: ゲーム本編用の虫を設定しました（{BugCatcherScript.bugs.Count}匹）");
+        }
+        else
+        {
+            Debug.LogWarning("TutorialManager: gameBugsが設定されていません！");
+        }
+
+        BugCatcherScript.enabled = true;
+    }
+
+    /// <summary>PathFollowerを有効化してゲーム本編の移動を開始</summary>
+    void StartPathFollower(string reason)
+    {
+        if (pathFollowerScript != null)
+        {
+            pathFollowerScript.enabled = true;
+            pathFollowerScript.pauseMovement = false; // 移動を許可
+            Debug.Log($"TutorialManager: PathFollower3 を有効化しました（{reason}）");
+
+            // セッション記録: PathFollower開始時刻を記録
+            if (recordTutorialData && UserSessionManager.Instance != null)
+            {
+                UserSessionManager.Instance.RecordTutorialEnd();
+            }
+        }
+    }
+
+    /// <summary>フェーズ切り替え待ち・動画再生待ちのコルーチンを止める</summary>
+    void StopPendingCoroutines()
+    {
+        if (phase3WaitCoroutine != null)
+        {
+            StopCoroutine(phase3WaitCoroutine);
+            phase3WaitCoroutine = null;
+        }
+        if (video2Coroutine != null)
+        {
+            StopCoroutine(video2Coroutine);
+            video2Coroutine = null;
+        }
+    }
 
     void OnDestroy()
     {

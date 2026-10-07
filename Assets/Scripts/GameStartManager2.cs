@@ -15,10 +15,10 @@ public class GameStartManager2 : MonoBehaviour
     public TextMeshProUGUI MenuText;
     public Image gameImage;
 
-    [Header("Outline Settings")]
-    [Range(0f, 1f)]
-    public float outlineWidth = 0.2f;
-    public Color outlineColor = Color.black;
+    // [Header("Outline Settings")]
+    // [Range(0f, 1f)]
+    // public float outlineWidth = 0.2f;
+    // public Color outlineColor = Color.black;
 
     [Header("Camera Settings")]
     public Camera mainCamera;
@@ -100,14 +100,15 @@ public class GameStartManager2 : MonoBehaviour
 
         // カメラに付いているスクリプトを全部停止しておく
         cameraScripts = mainCamera.GetComponents<MonoBehaviour>();
+        
         foreach (var script in cameraScripts)
         {
             script.enabled = false;
         }
 
         // テキストに縁取りを適用
-        ApplyOutline(startText);
-        ApplyOutline(MenuText);
+        // ApplyOutline(startText);
+        // ApplyOutline(MenuText);
 
         // ゲーム開始時はImageを非表示にする
         if (gameImage != null)
@@ -154,14 +155,14 @@ public class GameStartManager2 : MonoBehaviour
         }
     }
 
-    void ApplyOutline(TextMeshProUGUI textComponent)
-    {
-        if (textComponent != null)
-        {
-            textComponent.outlineWidth = outlineWidth;
-            textComponent.outlineColor = outlineColor;
-        }
-    }
+    // void ApplyOutline(TextMeshProUGUI textComponent)
+    // {
+    //     if (textComponent != null)
+    //     {
+    //         textComponent.outlineWidth = outlineWidth;
+    //         textComponent.outlineColor = outlineColor;
+    //     }
+    // }
 
     System.Collections.IEnumerator ReleaseStartSequence()
     {
@@ -174,11 +175,11 @@ public class GameStartManager2 : MonoBehaviour
             Debug.Log("GameStartManager2: TutorialScript を有効化しました ");
         }
 
-        if (BugCatcherScript != null)
-        {
-            BugCatcherScript.enabled = true;
-            Debug.Log("GameStartManager2: BugCatcherScript を有効化しました ");
-        }
+        // if (BugCatcherScript != null)
+        // {
+        //     BugCatcherScript.enabled = true;
+        //     Debug.Log("GameStartManager2: BugCatcherScript を有効化しました ");
+        // }
 
         // 「ゲームスタート！」を消す
         if (startText != null)
@@ -188,10 +189,10 @@ public class GameStartManager2 : MonoBehaviour
         }
 
         // Imageを表示する
-        if (gameImage != null)
-        {
-            gameImage.gameObject.SetActive(true);
-        }
+        // if (gameImage != null)
+        // {
+        //     gameImage.gameObject.SetActive(true);
+        // }
 
         // カメラのスクリプトを有効化して動けるようにする
         foreach (var script in cameraScripts)
@@ -200,10 +201,10 @@ public class GameStartManager2 : MonoBehaviour
         }
 
         // ゲーム本編開始を記録
-        if (recordSessionData && UserSessionManager.Instance != null)
-        {
-            UserSessionManager.Instance.RecordCustomEvent("GameplayStart", "IntroFinished");
-        }
+        // if (recordSessionData && UserSessionManager.Instance != null)
+        // {
+        //     UserSessionManager.Instance.RecordCustomEvent("GameplayStart", "IntroFinished");
+        // }
     }
 
     void LateUpdate()

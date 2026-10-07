@@ -26,6 +26,13 @@ public class Camera_Move : MonoBehaviour
     [Tooltip("キャリブレーションを使用するか")]
     public bool useCalibration = true;
 
+    [Header("座標の反転")]
+    [Tooltip("頭を右に動かしたのにカメラが逆に向く場合はオンにする")]
+    public bool invertX = false;
+
+    [Tooltip("頭を上下に動かしたのにカメラが逆に向く場合はオンにする")]
+    public bool invertY = false;
+
     [Header("回転角変換スケール")]
     public float horizontalAngleRange = 45f;
     public float verticalAngleRange = 30f;
@@ -163,6 +170,10 @@ public class Camera_Move : MonoBehaviour
         Vector3 pos = useCalibration
             ? calibrationManager.GetCalibratedPosition()
             : calibrationManager.GetRawPosition();
+
+        // Inspectorの設定に合わせてX・Yを反転
+        if (invertX) pos.x = -pos.x;
+        if (invertY) pos.y = -pos.y;
 
         // スムージング
         currentNoseX = Mathf.SmoothDamp(currentNoseX, pos.x, ref velX, smoothTime);

@@ -59,7 +59,7 @@
     <UnityVersion>2022.3.62f1</UnityVersion>
   </PropertyGroup>
   <ItemGroup>
-    <Analyzer Include="/Users/sagawa/.vscode/extensions/visualstudiotoolsforunity.vstuc-1.3.1/Analyzers/Microsoft.Unity.Analyzers.dll" />
+    <Analyzer Include="/Users/sagawa/.vscode/extensions/visualstudiotoolsforunity.vstuc-1.3.2/Analyzers/Microsoft.Unity.Analyzers.dll" />
     <Analyzer Include="/Applications/Unity/Hub/Editor/2022.3.62f1/Unity.app/Contents/Tools/Unity.SourceGenerators/Unity.SourceGenerators.dll" />
     <Analyzer Include="/Applications/Unity/Hub/Editor/2022.3.62f1/Unity.app/Contents/Tools/Unity.SourceGenerators/Unity.Properties.SourceGenerator.dll" />
   </ItemGroup>
@@ -192,6 +192,7 @@
     <Compile Include="Assets/UniGLTF/Core/Scripts/IO/TextureConverter.cs" />
     <Compile Include="Assets/UniGLTF/UniHumanoid/Scripts/HumanPoseClip.cs" />
     <Compile Include="Assets/Scripts/Camera_Move.cs" />
+    <Compile Include="Assets/Scripts/InsectSelectMenu.cs" />
     <Compile Include="Assets/UniGLTF/Core/Scripts/IO/TextureSamplerUtil.cs" />
     <Compile Include="Assets/UniGLTF/UniHumanoid/PoseModifier/HandPose.cs" />
     <Compile Include="Assets/UniGLTF/UniJSON/Scripts/MsgPack/MsgPackTypeExtensions.cs" />

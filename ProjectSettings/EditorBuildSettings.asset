@@ -12,6 +12,9 @@ EditorBuildSettings:
     path: Assets/Scene/Forest.unity
     guid: 9be980686eebe4b4792545a18932921f
   - enabled: 1
+    path: Assets/Scene/ob_selector.unity
+    guid: c918764f12e4c44b39d2dda0440f058b
+  - enabled: 0
     path: Assets/Scene/Observation_selector.unity
     guid: e0114af4bcd1a4d97abbaacc2bbe0692
   - enabled: 1
