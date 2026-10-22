@@ -8,3 +8,7 @@ MemoryCaptures/
 
 .DS_Store
 Assets/Fonts/*.asset
+
+*.csproj
+*.sln
+.vscode/

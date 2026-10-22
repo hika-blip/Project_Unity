@@ -1416,8 +1416,8 @@ MonoBehaviour:
       m_Calls: []
   m_text: "\u5DE6\u53F3\u306B\u3046\u3054\u3044\u3066\u307F\u3088\u3046\uFF01"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 84dcfe11c2a16408491d30d8691c19a0, type: 2}
-  m_sharedMaterial: {fileID: -5464939074057459735, guid: 84dcfe11c2a16408491d30d8691c19a0, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 0c68b705c6fcc4fc9a79ba0dcb96c19a, type: 2}
+  m_sharedMaterial: {fileID: -8876477655024266384, guid: 0c68b705c6fcc4fc9a79ba0dcb96c19a, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
