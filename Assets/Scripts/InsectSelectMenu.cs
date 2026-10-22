@@ -11,6 +11,7 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
 
+
 /// <summary>
 /// 観察する昆虫の選択メニュー
 /// ・左右の手首のうち画面（カメラ）に近い方を「有効な手」とする
