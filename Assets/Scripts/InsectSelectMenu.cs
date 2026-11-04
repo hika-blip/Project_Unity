@@ -13,17 +13,16 @@ using TMPro;
 
 
 /// <summary>
-/// 観察する昆虫の選択メニュー
-/// ・左右の手首のうち画面（カメラ）に近い方を「有効な手」とする
-/// ・有効な手と同じ側の肩を基準に、手首が肩より右なら右の選択肢へ、左なら左の選択肢へ進む
-///   （出し続けると一定間隔で1つずつ進む。どれだけ横に出したかは肩幅で割って判定）
-/// ・手を下ろしているとき（手首が肩より一定以上下）は操作していない扱い
+/// 観察する昆虫の選択メニュー（鼻の位置で選択版）
+/// ・鼻の位置は CalibrationManager（DontDestroyOnLoad）から読む
+///   （CalibrationManager が UDP 9999 を受信しているため、このスクリプトでは9999を開かない）
+/// ・キャリブレーション済みの鼻のx（= キャリブレーション位置からのずれ）が
+///   右に一定以上なら右の選択肢へ、左なら左の選択肢へ進む
+///   （中央のまわりは余裕（不感帯）。出し続けると一定間隔で1つずつ進む）
 /// ・選択中のカードは拡大、それ以外はグレーのレイヤーをかける
 /// ・しゃがみ（UDP 9993）で決定
 ///
 /// 受信するUDP（dual_camera_gesture_udp.py）
-///   9995 左手首 "x,y,z" / 9994 右手首 "x,y,z"
-///   9992 左肩   "x,y,z" / 9991 右肩   "x,y,z"
 ///   9993 しゃがみ "0"(立っている) / "1"(しゃがんでいる) を毎フレーム
 /// </summary>
 public class InsectSelectMenu : MonoBehaviour
@@ -36,14 +35,6 @@ public class InsectSelectMenu : MonoBehaviour
         public Color cardColor = new Color(0.35f, 0.4f, 0.9f);
         [Tooltip("昆虫のゾーン番号（1〜7）。0にすると「次へ」（Endingへ移動）として扱う")]
         public int zoneNumber = 0;
-    }
-
-    // SmallerZ: zが小さい方（カメラに近い方）を有効な手にする
-    // CloserToZero: |z|が0に近い方を有効な手にする
-    public enum HandPickMode
-    {
-        SmallerZ,
-        CloserToZero
     }
 
     [Header("選択肢（左から順に。昆虫7種＋次へ）")]
@@ -85,40 +76,28 @@ public class InsectSelectMenu : MonoBehaviour
     public Image stepGaugeImage;
 
     [Header("UDPポート")]
-    public int leftWristPort = 9995;
-    public int rightWristPort = 9994;
-    public int leftShoulderPort = 9992;
-    public int rightShoulderPort = 9991;
     public int squatPort = 9993;
-    [Tooltip("手首・肩のデータがこの秒数届かなければ、検出できていないとみなす")]
-    public float dataTimeout = 0.3f;
     [Tooltip("しゃがみのデータがこの秒数届かなければ、立っているとみなす")]
     public float squatTimeout = 0.5f;
 
-    [Header("有効な手の選び方")]
-    [Tooltip("SmallerZ: カメラに近い方（zが小さい方）／CloserToZero: |z|が0に近い方")]
-    public HandPickMode handPickMode = HandPickMode.SmallerZ;
-    [Tooltip("もう片方の手の方がこれ以上カメラに近いときだけ、使う手を切り替える")]
-    public float handSwitchMargin = 0.05f;
+    [Header("鼻の位置（CalibrationManagerから取得）")]
+    [Tooltip("空欄なら自動で探す（DontDestroyOnLoadのCalibrationManager）")]
+    public CalibrationManager calibrationManager;
+    [Tooltip("ON: キャリブレーション位置を基準にしたずれを使う（Camera_Moveと同じ）／OFF: 生の座標を使う")]
+    public bool useCalibration = true;
 
-    [Header("手の位置による選択（値はすべて「肩幅の何倍か」）")]
-    [Tooltip("手首が肩から肩幅のこの倍数以上横に出たら、その方向に進む")]
-    public float moveThreshold = 0.8f;
-    [Tooltip("進んでいる状態から中央に戻ったとみなす位置（moveThresholdより小さくする）")]
-    public float returnThreshold = 0.5f;
-    [Tooltip("手首が肩より肩幅のこの倍数以上下にあるときは「手を下ろしている＝操作していない」扱い")]
-    public float handDownLimit = 0.8f;
-    [Tooltip("両肩が見えていないときに使う肩幅（正規化座標）")]
-    public float defaultShoulderWidth = 0.35f;
-    [Tooltip("手の位置の平滑化（小さいほど滑らか・反応は遅い）")]
-    [Range(0.05f, 1f)] public float handSmoothing = 0.3f;
+    [Header("鼻の位置による選択（値は正規化座標。1.0 ≒ 約1m）")]
+    [Tooltip("キャリブレーション位置からこの距離以上横にずれたら、その方向に進む（=中央の余裕の大きさ）")]
+    public float moveThreshold = 0.15f;
+    [Tooltip("進んでいる状態から中央に戻ったとみなす距離（moveThresholdより小さくする）")]
+    public float returnThreshold = 0.08f;
     [Tooltip("左右に出してから最初の1つ進むまでの秒数")]
     public float firstStepDelay = 0.5f;
     [Tooltip("左右に出し続けたとき、次の選択肢へ進む間隔(秒)")]
     public float repeatInterval = 1.0f;
-    [Tooltip("手を右に出したのに選択が左に進む場合は切り替える")]
-    public bool invertX = true;
-    [Tooltip("シーン開始時、一度手を下ろす（中央に戻す）まで左右移動を受け付けない")]
+    [Tooltip("体を右に動かしたのに選択が左に進む場合はオンにする（Camera_MoveのInvert Xと同じ向き）")]
+    public bool invertX = false;
+    [Tooltip("シーン開始時、一度中央（returnThreshold以内）に戻るまで左右移動を受け付けない")]
     public bool requireCenterAtStart = true;
 
     [Header("決定（しゃがみ）")]
@@ -150,17 +129,13 @@ public class InsectSelectMenu : MonoBehaviour
     public int SelectedIndex { get; private set; }
 
     // UDP受信
-    private UdpFloatReceiver lWristRecv, rWristRecv, lShoulderRecv, rShoulderRecv, squatRecv;
+    private UdpFloatReceiver squatRecv;
 
     // 表示用
     private float displayPos;
 
-    // 手の状態
-    private int activeHand = -1;      // -1:なし 0:左手 1:右手
-    private float shoulderWidth;
-    private bool hasSmoothedRatio;
-    private float smoothedRatio;      // （手首x - 肩x）/ 肩幅 を平滑化したもの
-    private string handState = "-";   // デバッグ表示用
+    // 鼻の状態（デバッグ表示用）
+    private string noseState = "-";
 
     // 移動の状態
     private int moveDir = 0;          // -1:左 0:中央 1:右
@@ -183,8 +158,6 @@ public class InsectSelectMenu : MonoBehaviour
 
     void Start()
     {
-        shoulderWidth = defaultShoulderWidth;
-
         // 効果音用AudioSourceの準備
         if (sfxSource == null)
         {
@@ -193,6 +166,22 @@ public class InsectSelectMenu : MonoBehaviour
         sfxSource.playOnAwake = false;
         sfxSource.loop = false;
         sfxSource.spatialBlend = 0f; // 2D音声
+
+        // CalibrationManagerを探す（前のシーンからDontDestroyOnLoadで引き継がれている）
+        if (calibrationManager == null)
+        {
+            calibrationManager = FindObjectOfType<CalibrationManager>();
+            if (calibrationManager == null)
+            {
+                Debug.LogWarning("[InsectSelectMenu] CalibrationManager が見つかりません。鼻による選択は使えません（キーボードとしゃがみは使えます）");
+            }
+        }
+
+        // まだ1回も観察していなければ「次へ」（ゾーン番号0）を出さない
+        if (!SessionFlags.HasObserved)
+        {
+            items.RemoveAll(it => it.zoneNumber < 1);
+        }
 
         BuildCards();
         StartReceivers();
@@ -217,7 +206,7 @@ public class InsectSelectMenu : MonoBehaviour
 
         if (!decided)
         {
-            HandleHandPosition();
+            HandleNosePosition();
             if (enableKeyboard) HandleKeyboard();
             HandleSquatDecide();
         }
@@ -281,104 +270,44 @@ public class InsectSelectMenu : MonoBehaviour
     }
 
     // ------------------------------------------------------------
-    // 手の位置（有効な手の手首と、同じ側の肩の位置関係）による選択
+    // 鼻の位置（キャリブレーション位置からの横のずれ）による選択
     // ------------------------------------------------------------
-    private void HandleHandPosition()
+    private void HandleNosePosition()
     {
-        bool lwOk = TryRead(lWristRecv, out Vector3 lw);
-        bool rwOk = TryRead(rWristRecv, out Vector3 rw);
-        bool lsOk = TryRead(lShoulderRecv, out Vector3 ls);
-        bool rsOk = TryRead(rShoulderRecv, out Vector3 rs);
-
-        // 肩幅を更新（両肩が見えているときだけ。xy平面上の距離）
-        if (lsOk && rsOk)
+        float dx = 0f;
+        if (calibrationManager != null)
         {
-            float w = Vector2.Distance(new Vector2(ls.x, ls.y), new Vector2(rs.x, rs.y));
-            if (w > 0.05f) shoulderWidth = Mathf.Lerp(shoulderWidth, w, 0.2f);
-        }
+            Vector3 pos = useCalibration
+                ? calibrationManager.GetCalibratedPosition()
+                : calibrationManager.GetRawPosition();
 
-        // 手首と同じ側の肩の両方が見えている手だけが候補
-        bool leftValid = lwOk && lsOk;
-        bool rightValid = rwOk && rsOk;
-
-        // 有効な手を選ぶ（カメラに近い方）
-        int candidate = -1;
-        if (leftValid && rightValid) candidate = HandScore(lw.z) <= HandScore(rw.z) ? 0 : 1;
-        else if (leftValid) candidate = 0;
-        else if (rightValid) candidate = 1;
-
-        // 両手の近さがほぼ同じときは今の手を使い続ける（パタパタ防止）
-        bool activeStillValid = (activeHand == 0 && leftValid) || (activeHand == 1 && rightValid);
-        if (activeStillValid && candidate != activeHand && candidate != -1)
-        {
-            float cur = HandScore(activeHand == 0 ? lw.z : rw.z);
-            float other = HandScore(candidate == 0 ? lw.z : rw.z);
-            if (cur - other < handSwitchMargin) candidate = activeHand;
-        }
-
-        if (candidate != activeHand)
-        {
-            activeHand = candidate;
-            hasSmoothedRatio = false; // 手が変わったら平滑化をやり直す
-        }
-
-        // 手の横方向のずれ（肩幅で割る）を計算。手を下ろしている・手がない場合は中央扱い
-        bool operating = false;
-        if (activeHand != -1)
-        {
-            Vector3 wrist = activeHand == 0 ? lw : rw;
-            Vector3 shoulder = activeHand == 0 ? ls : rs;
-            float width = Mathf.Max(shoulderWidth, 0.05f);
-
-            // y は上が正（Python側で変換済み）。手首が肩より一定以上下なら「手を下ろしている」
-            float downRatio = (shoulder.y - wrist.y) / width;
-            if (downRatio <= handDownLimit)
-            {
-                float dx = wrist.x - shoulder.x;
-                if (invertX) dx = -dx;
-                float ratio = dx / width;
-
-                smoothedRatio = hasSmoothedRatio ? Mathf.Lerp(smoothedRatio, ratio, handSmoothing) : ratio;
-                hasSmoothedRatio = true;
-                operating = true;
-                handState = $"{(activeHand == 0 ? "左手" : "右手")}  横:{smoothedRatio:F2}  下:{downRatio:F2}";
-            }
-            else
-            {
-                handState = $"{(activeHand == 0 ? "左手" : "右手")}（下ろしている）  下:{downRatio:F2}";
-            }
+            dx = pos.x;
+            if (invertX) dx = -dx;
+            noseState = $"x:{pos.x:F3}  ずれ(右が+):{dx:F3}";
         }
         else
         {
-            handState = "手が見えていない";
+            noseState = "CalibrationManagerなし";
         }
 
-        if (!operating)
-        {
-            hasSmoothedRatio = false;
-            smoothedRatio = 0f;
-        }
-
-        float x = operating ? smoothedRatio : 0f;
-
-        // 今どちら側に出しているか（入る位置と戻る位置を分けてパタパタ防止）
+        // 今どちら側にずれているか（入る位置と戻る位置を分けてパタパタ防止）
         int dir = moveDir;
         if (moveDir == 0)
         {
-            if (x > moveThreshold) dir = 1;
-            else if (x < -moveThreshold) dir = -1;
+            if (dx > moveThreshold) dir = 1;
+            else if (dx < -moveThreshold) dir = -1;
         }
         else
         {
-            if (Mathf.Abs(x) < returnThreshold) dir = 0;
-            else if (moveDir == 1 && x < -moveThreshold) dir = -1;
-            else if (moveDir == -1 && x > moveThreshold) dir = 1;
+            if (Mathf.Abs(dx) < returnThreshold) dir = 0;
+            else if (moveDir == 1 && dx < -moveThreshold) dir = -1;
+            else if (moveDir == -1 && dx > moveThreshold) dir = 1;
         }
 
-        // 開始直後は、一度中央（手を下ろす・手が見えない含む）に戻ってから受け付ける
+        // 開始直後は、一度中央に戻ってから受け付ける
         if (!centerConfirmed)
         {
-            if (Mathf.Abs(x) < returnThreshold) centerConfirmed = true;
+            if (Mathf.Abs(dx) < returnThreshold) centerConfirmed = true;
             moveDir = 0;
             return;
         }
@@ -393,25 +322,13 @@ public class InsectSelectMenu : MonoBehaviour
             }
         }
 
-        // 左右に出し続けている間、一定間隔で1つずつ進む
+        // 左右にずれている間、一定間隔で1つずつ進む
         if (moveDir != 0 && Time.time >= nextStepTime)
         {
             Step(moveDir);
             currentStepWait = repeatInterval;
             nextStepTime = Time.time + repeatInterval;
         }
-    }
-
-    private bool TryRead(UdpFloatReceiver recv, out Vector3 v)
-    {
-        v = Vector3.zero;
-        return recv != null && recv.TryGet(out v, dataTimeout);
-    }
-
-    // 小さいほど「カメラに近い」
-    private float HandScore(float z)
-    {
-        return handPickMode == HandPickMode.SmallerZ ? z : Mathf.Abs(z);
     }
 
     private void Step(int dir)
@@ -502,6 +419,7 @@ public class InsectSelectMenu : MonoBehaviour
             // ZoneSelectorと同じく、選んだ昆虫をSelectionDataに渡してObservationへ
             Debug.Log($"[InsectSelectMenu] Zone {item.zoneNumber}（{item.label}）selected");
             SelectionData.SelectedZone = item.zoneNumber;
+            SessionFlags.HasObserved = true;
 
             if (UserSessionManager.Instance != null && UserSessionManager.Instance.IsUserActive)
             {
@@ -628,26 +546,14 @@ public class InsectSelectMenu : MonoBehaviour
     private void StartReceivers()
     {
         StopReceivers();
-        lWristRecv = new UdpFloatReceiver(leftWristPort);
-        rWristRecv = new UdpFloatReceiver(rightWristPort);
-        lShoulderRecv = new UdpFloatReceiver(leftShoulderPort);
-        rShoulderRecv = new UdpFloatReceiver(rightShoulderPort);
         squatRecv = new UdpFloatReceiver(squatPort);
-        lWristRecv.Start();
-        rWristRecv.Start();
-        lShoulderRecv.Start();
-        rShoulderRecv.Start();
         squatRecv.Start();
     }
 
     private void StopReceivers()
     {
-        lWristRecv?.Stop();
-        rWristRecv?.Stop();
-        lShoulderRecv?.Stop();
-        rShoulderRecv?.Stop();
         squatRecv?.Stop();
-        lWristRecv = rWristRecv = lShoulderRecv = rShoulderRecv = squatRecv = null;
+        squatRecv = null;
     }
 
     void OnDisable() { StopReceivers(); }
@@ -657,10 +563,10 @@ public class InsectSelectMenu : MonoBehaviour
     void OnGUI()
     {
         if (!showDebugInfo) return;
-        GUILayout.BeginArea(new Rect(10, 10, 480, 180));
+        GUILayout.BeginArea(new Rect(10, 10, 520, 160));
         GUILayout.Label("=== InsectSelectMenu ===");
-        GUILayout.Label($"有効な手: {handState}");
-        GUILayout.Label($"肩幅: {shoulderWidth:F3}  (進む: ±{moveThreshold:F2} / 戻る: ±{returnThreshold:F2} / 下ろし判定: {handDownLimit:F2})");
+        GUILayout.Label($"鼻: {noseState}");
+        GUILayout.Label($"キャリブレーション使用: {useCalibration}  (進む: ±{moveThreshold:F2} / 戻る: ±{returnThreshold:F2})");
         GUILayout.Label($"方向: {(moveDir == 1 ? "右" : moveDir == -1 ? "左" : "中央")}  中央確認: {centerConfirmed}");
         GUILayout.Label($"選択中: [{SelectedIndex}] {(items.Count > 0 ? items[SelectedIndex].label : "-")}");
         GUILayout.EndArea();

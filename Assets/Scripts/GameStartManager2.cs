@@ -106,10 +106,6 @@ public class GameStartManager2 : MonoBehaviour
             script.enabled = false;
         }
 
-        // テキストに縁取りを適用
-        // ApplyOutline(startText);
-        // ApplyOutline(MenuText);
-
         // ゲーム開始時はImageを非表示にする
         if (gameImage != null)
         {
@@ -135,16 +131,16 @@ public class GameStartManager2 : MonoBehaviour
 
     void HideAllVideos()
     {
-        if (videoRawImage1 != null)
-        {
-            videoRawImage1.gameObject.SetActive(false);
-            Debug.Log("GameStartManager2: 動画1を非表示にしました");
-        }
-        if (videoRawImage2 != null)
-        {
-            videoRawImage2.gameObject.SetActive(false);
-            Debug.Log("GameStartManager2: 動画2を非表示にしました");
-        }
+        // if (videoRawImage1 != null)
+        // {
+        //     videoRawImage1.gameObject.SetActive(false);
+        //     Debug.Log("GameStartManager2: 動画1を非表示にしました");
+        // }
+        // if (videoRawImage2 != null)
+        // {
+        //     videoRawImage2.gameObject.SetActive(false);
+        //     Debug.Log("GameStartManager2: 動画2を非表示にしました");
+        // }
         if (videoPlayer1 != null)
         {
             videoPlayer1.Stop();

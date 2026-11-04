@@ -210,8 +210,12 @@ public class UserSessionManager : MonoBehaviour
             CustomEvents = new List<CustomEvent>(),
             SceneStayDurations = new Dictionary<string, double>(),
             ZoneSelections = new List<ZoneSelection>(),
+            QuizResults = new List<QuizResult>(),
             TutorialDuration = 0f
         };
+
+        // セッションごとのフラグ（クイズ済み・観察済み）をリセット
+        SessionFlags.Reset();
 
         // チュートリアル時間をリセット
         tutorialStartTime = -1f;
@@ -492,6 +496,45 @@ public class UserSessionManager : MonoBehaviour
         return 0f;
     }
 
+    /// <summary>
+    /// クイズの結果を記録（QuizManagerから呼ばれる）
+    /// </summary>
+    public void RecordQuizResult(int questionID, int zoneNumber, bool answered, bool correct,
+                                 string chosenText, int chosenPosition, int correctPosition, float responseTime)
+    {
+        if (currentSession == null)
+        {
+            Debug.LogWarning("セッションが開始されていません。クイズ結果を記録できません。");
+            return;
+        }
+
+        if (currentSession.QuizResults == null)
+        {
+            currentSession.QuizResults = new List<QuizResult>();
+        }
+
+        currentSession.QuizResults.Add(new QuizResult
+        {
+            QuestionID = questionID,
+            ZoneNumber = zoneNumber,
+            Answered = answered,
+            IsCorrect = correct,
+            ChosenText = chosenText,
+            ChosenPosition = chosenPosition,
+            CorrectPosition = correctPosition,
+            ResponseTimeSeconds = responseTime,
+            AnswerTime = DateTime.Now
+        });
+
+        string result = answered ? (correct ? "Correct" : "Wrong") : "TimeUp";
+        Debug.Log($"[{CurrentUserID}] クイズ結果記録: 問題{questionID} (Zone {zoneNumber}) {result} {responseTime:F1}秒");
+
+        // カスタムイベントとしても記録
+        RecordCustomEvent("QuizAnswer",
+            $"QuestionID={questionID},Zone={zoneNumber},Result={result},Chosen={chosenText}," +
+            $"ChosenPos={chosenPosition},CorrectPos={correctPosition},Time={responseTime:F2}");
+    }
+
     public void RecordCustomEvent(string eventName, string eventData = "")
     {
         if (currentSession != null)
@@ -576,6 +619,7 @@ public class UserSessionManager : MonoBehaviour
                 header.Append($",{sceneName}StayTime(sec)");
             }
             header.Append(",ZoneSelectionCount,ZoneSelections,SceneTransitions,CustomEvents");
+            header.Append(",QuizQuestionIDs,QuizCorrectCount,QuizResults");
             csv.AppendLine(header.ToString());
 
             // データ行（全ユーザーのセッションを時系列で出力）
@@ -649,6 +693,27 @@ public class UserSessionManager : MonoBehaviour
                 customEvents = EscapeCSV(customEvents);
 
                 dataRow.Append($",{zoneSelections},{sceneTransitions},{customEvents}");
+
+                // クイズ結果（問題番号・正解数・詳細）
+                string quizIDs = "";
+                int quizCorrect = 0;
+                string quizResults = "";
+                if (session.QuizResults != null && session.QuizResults.Count > 0)
+                {
+                    List<string> ids = new List<string>();
+                    List<string> details = new List<string>();
+                    foreach (var q in session.QuizResults)
+                    {
+                        ids.Add(q.QuestionID.ToString());
+                        if (q.IsCorrect) quizCorrect++;
+                        string res = q.Answered ? (q.IsCorrect ? "正解" : "不正解") : "時間切れ";
+                        details.Add($"Q{q.QuestionID}(Zone{q.ZoneNumber}):{res} 回答={q.ChosenText} " +
+                                    $"位置={q.ChosenPosition}/正解位置={q.CorrectPosition} {q.ResponseTimeSeconds:F1}s({q.AnswerTime:HH:mm:ss})");
+                    }
+                    quizIDs = string.Join("; ", ids);
+                    quizResults = string.Join("; ", details);
+                }
+                dataRow.Append($",{EscapeCSV(quizIDs)},{quizCorrect},{EscapeCSV(quizResults)}");
                 csv.AppendLine(dataRow.ToString());
             }
 
@@ -771,6 +836,24 @@ public class SessionData
     public Dictionary<string, double> SceneStayDurations; // 各シーンの滞在時間（秒）
     public List<ZoneSelection> ZoneSelections; // ゾーン選択履歴
     public float TutorialDuration; // チュートリアル時間（秒）
+    public List<QuizResult> QuizResults; // クイズ結果
+}
+
+/// <summary>
+/// クイズ結果
+/// </summary>
+[System.Serializable]
+public class QuizResult
+{
+    public int QuestionID;          // 問題番号（CSVの1列目）
+    public int ZoneNumber;          // どの昆虫の問題か
+    public bool Answered;           // 回答したか（falseなら時間切れ）
+    public bool IsCorrect;          // 正解したか
+    public string ChosenText;       // 選んだ選択肢
+    public int ChosenPosition;      // 選んだ位置（左から1〜4。未回答は0）
+    public int CorrectPosition;     // 正解の位置（左から1〜4）
+    public float ResponseTimeSeconds; // 出題から回答までの秒数
+    public DateTime AnswerTime;     // 回答時刻
 }
 
 /// <summary>

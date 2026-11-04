@@ -20,6 +20,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scene/Observation.unity
     guid: 226c2257d47c040299ec78703b526849
+  - enabled: 1
+    path: Assets/Scene/Quiz.unity
+    guid: 857685098dcae433592684ff2b03b9c2
   - enabled: 0
     path: Assets/Scene/Survey.unity
     guid: 160541384773e4c35bf39ab583bcb459

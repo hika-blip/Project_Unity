@@ -73,6 +73,12 @@ public class WristCursorSceneController : MonoBehaviour
     [Tooltip("遷移先のシーン名")]
     public string targetSceneName = "Observation_selecter";
 
+    [Tooltip("このセッションでまだクイズをしていなければ、こちらのシーンへ移動する（空欄ならクイズなし）")]
+    public string quizSceneName = "Quiz";
+
+    [Tooltip("デバッグ用：オンにすると毎回クイズシーンを経由する")]
+    public bool debugAlwaysShowQuiz = false;
+
     [Header("Button Settings")]
     [Tooltip("戻るボタンのRectTransform")]
     public RectTransform backButton;
@@ -476,17 +482,25 @@ public class WristCursorSceneController : MonoBehaviour
             progressBarImage.fillAmount = 1f;
         }
 
+        // このセッションでまだクイズをしていなければクイズシーンへ（見つからなければ選択画面へ）
+        string sceneToLoad = targetSceneName;
         int targetSceneIndex = -1;
-        for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+        bool goQuiz = !string.IsNullOrEmpty(quizSceneName) && (!SessionFlags.QuizDone || debugAlwaysShowQuiz);
+        if (goQuiz)
         {
-            string scenePath = SceneUtility.GetScenePathByBuildIndex(i);
-            string sceneNameInBuild = System.IO.Path.GetFileNameWithoutExtension(scenePath);
-
-            // 大文字小文字を無視して比較
-            if (sceneNameInBuild.Equals(targetSceneName, System.StringComparison.OrdinalIgnoreCase))
+            targetSceneIndex = FindSceneIndex(quizSceneName);
+            if (targetSceneIndex >= 0)
             {
-                targetSceneIndex = i;
+                sceneToLoad = quizSceneName;
             }
+            else
+            {
+                Debug.LogWarning($"WristCursorSceneController: Quiz scene '{quizSceneName}' not found. Going to '{targetSceneName}' instead.");
+            }
+        }
+        if (targetSceneIndex < 0)
+        {
+            targetSceneIndex = FindSceneIndex(targetSceneName);
         }
 
         yield return new WaitForSeconds(0.3f);
@@ -495,7 +509,7 @@ public class WristCursorSceneController : MonoBehaviour
         {
             // 次のシーンで同じポートを使えるよう、先にUDPを閉じる
             StopReceivers();
-            Debug.Log($"WristCursorSceneController: Loading scene '{targetSceneName}' (index {targetSceneIndex})");
+            Debug.Log($"WristCursorSceneController: Loading scene '{sceneToLoad}' (index {targetSceneIndex})");
             SceneManager.LoadScene(targetSceneIndex);
         }
         else
@@ -505,6 +519,22 @@ public class WristCursorSceneController : MonoBehaviour
             isTransitioning = false;
             ResetHoverState();
         }
+    }
+
+    int FindSceneIndex(string sceneName)
+    {
+        for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+        {
+            string scenePath = SceneUtility.GetScenePathByBuildIndex(i);
+            string sceneNameInBuild = System.IO.Path.GetFileNameWithoutExtension(scenePath);
+
+            // 大文字小文字を無視して比較
+            if (sceneNameInBuild.Equals(sceneName, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     [ContextMenu("Test Scene Transition")]
