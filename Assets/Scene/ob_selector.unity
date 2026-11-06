@@ -153,10 +153,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   TitleBGM1: {fileID: 8300000, guid: 32c579d70d1c64d48b862cc6eaa57ead, type: 3}
   BGM1Volume: 0.2
+  BGM1Loop: 1
   TitleBGM2: {fileID: 0}
   BGM2Volume: 0
+  BGM2Loop: 1
   TitleBGM3: {fileID: 8300000, guid: 025352aaef4db4b7d85b6e85d1b40ca9, type: 3}
   BGM3Volume: 1
+  BGM3Loop: 1
   BGM3StartDelay: 0.5
   BGM3Interval: 4
 --- !u!4 &187080881
@@ -871,8 +874,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+    rgba: 4278228735
+  m_fontColor: {r: 1, g: 0.5882353, b: 0, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:

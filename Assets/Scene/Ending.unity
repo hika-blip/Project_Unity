@@ -226,15 +226,15 @@ MonoBehaviour:
       m_Calls: []
   m_text: "\u307E\u305F\u3042\u305D\u3093\u3067\u306D\uFF01"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 0d0c799a5364f4666909fbd0f5bbd793, type: 2}
-  m_sharedMaterial: {fileID: 2642211560085927163, guid: 0d0c799a5364f4666909fbd0f5bbd793, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: 0c68b705c6fcc4fc9a79ba0dcb96c19a, type: 2}
+  m_sharedMaterial: {fileID: -8876477655024266384, guid: 0c68b705c6fcc4fc9a79ba0dcb96c19a, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+    rgba: 4278230015
+  m_fontColor: {r: 1, g: 0.6096755, b: 0, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -976,14 +976,14 @@ MonoBehaviour:
   TitleBGM1: {fileID: 8300000, guid: a11e2a349da7d420287f9d616ded6daf, type: 3}
   BGM1Volume: 0.5
   BGM1Loop: 1
-  TitleBGM2: {fileID: 8300000, guid: 116c1bc1d53e64c5f881603cb4e60be9, type: 3}
+  TitleBGM2: {fileID: 0}
   BGM2Volume: 1
   BGM2Loop: 0
-  TitleBGM3: {fileID: 0}
+  TitleBGM3: {fileID: 8300000, guid: 116c1bc1d53e64c5f881603cb4e60be9, type: 3}
   BGM3Volume: 1
-  BGM3Loop: 1
-  BGM3StartDelay: 0
-  BGM3Interval: 5
+  BGM3Loop: 0
+  BGM3StartDelay: 3
+  BGM3Interval: 10
 --- !u!4 &1692136949
 Transform:
   m_ObjectHideFlags: 0

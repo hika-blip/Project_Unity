@@ -125,10 +125,21 @@ public class QuizManager : MonoBehaviour
 
     private UdpFloatReceiver squatRecv;
 
+    // 選択肢の元の大きさ（Inspectorで設定したScale）。拡大はこれに掛け算する
+    private Vector3[] baseScales = new Vector3[4];
+
     void Start()
     {
         // クイズシーンを開いた時点で「このセッションはクイズ済み」にする
         SessionFlags.QuizDone = true;
+
+        // Inspectorで設定した選択肢の大きさを覚えておく
+        for (int i = 0; i < 4; i++)
+        {
+            baseScales[i] = (i < choiceBackgrounds.Length && choiceBackgrounds[i] != null)
+                ? choiceBackgrounds[i].rectTransform.localScale
+                : Vector3.one;
+        }
 
         if (sfxSource == null) sfxSource = gameObject.AddComponent<AudioSource>();
         sfxSource.playOnAwake = false;
@@ -451,10 +462,10 @@ public class QuizManager : MonoBehaviour
             if (i >= choiceBackgrounds.Length || choiceBackgrounds[i] == null) continue;
 
             bool selected = i == selectedSlot;
-            float target = selected ? selectedScale : 1f;
+            // 元の大きさ × （選択中なら selectedScale 倍）
+            Vector3 target = baseScales[i] * (selected ? selectedScale : 1f);
             RectTransform rt = choiceBackgrounds[i].rectTransform;
-            float s = Mathf.Lerp(rt.localScale.x, target, k);
-            rt.localScale = Vector3.one * s;
+            rt.localScale = Vector3.Lerp(rt.localScale, target, k);
 
             // 回答中だけ、選択中の区画を色で示す（結果表示中は正誤の色のまま）
             if (state == State.Answering)

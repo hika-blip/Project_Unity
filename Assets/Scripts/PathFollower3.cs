@@ -43,6 +43,16 @@ public class PathFollower3 : MonoBehaviour
     public string nextSceneName = "Observation_selector";
     public float messageDisplayTime = 2f;
 
+    [Header("ゲーム終了の効果音")]
+    [Tooltip("「ゲームおわり！」の表示と同時に鳴らす音（.wavなど）")]
+    public AudioClip gameOverSound;
+    [Range(0f, 1f)]
+    public float gameOverVolume = 1f;
+    [Tooltip("ONなら音が鳴り終わるまで次のシーンへ移動しない（Message Display Timeより音が長い場合、途中で切れないようにする）")]
+    public bool waitForGameOverSound = true;
+    [Tooltip("音を鳴らすAudioSource（空欄なら自動で追加）")]
+    public AudioSource sfxSource;
+
     [Header("デバッグ表示")]
     public bool showPath = true;
     public Color pathColor = Color.green;
@@ -99,6 +109,15 @@ public class PathFollower3 : MonoBehaviour
         {
             Debug.LogWarning("PathFollower: Camera_Move component not found on followTarget!");
         }
+
+        // 効果音用AudioSourceの準備
+        if (sfxSource == null)
+        {
+            sfxSource = gameObject.AddComponent<AudioSource>();
+        }
+        sfxSource.playOnAwake = false;
+        sfxSource.loop = false;
+        sfxSource.spatialBlend = 0f; // 2D音声
 
         GenerateSmoothCurve();
 
@@ -307,7 +326,20 @@ public class PathFollower3 : MonoBehaviour
             gameOverText.text = "ゲームおわり！";
         }
 
-        yield return new WaitForSeconds(messageDisplayTime);
+        // テキストの表示と同時に効果音を鳴らす
+        float waitTime = messageDisplayTime;
+        if (gameOverSound != null && sfxSource != null)
+        {
+            sfxSource.PlayOneShot(gameOverSound, gameOverVolume);
+
+            // シーンを移動すると音が切れるため、必要なら鳴り終わるまで待つ
+            if (waitForGameOverSound)
+            {
+                waitTime = Mathf.Max(waitTime, gameOverSound.length);
+            }
+        }
+
+        yield return new WaitForSeconds(waitTime);
 
         LoadNextScene();
     }
