@@ -657,8 +657,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   TitleBGM1: {fileID: 8300000, guid: 32c579d70d1c64d48b862cc6eaa57ead, type: 3}
   BGM1Volume: 0.2
+  BGM1Loop: 1
   TitleBGM2: {fileID: 0}
   BGM2Volume: 1
+  BGM2Loop: 1
+  TitleBGM3: {fileID: 0}
+  BGM3Volume: 1
+  BGM3Loop: 1
+  BGM3StartDelay: 0
+  BGM3Interval: 5
 --- !u!4 &712293745
 Transform:
   m_ObjectHideFlags: 0
@@ -739,7 +746,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u554F\u984C"
+  m_text: "\u30C1\u30E7\u30A6\u306E\u7FBD\u306B\u3042\u308B\n\u6C34\u306B\u6D6E\u304F\u305F\u3081\u306E\u3082\u306E\u306F\uFF1F"
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 0c68b705c6fcc4fc9a79ba0dcb96c19a, type: 2}
   m_sharedMaterial: {fileID: -8876477655024266384, guid: 0c68b705c6fcc4fc9a79ba0dcb96c19a, type: 2}
@@ -748,8 +755,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
-  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
+    rgba: 4278235647
+  m_fontColor: {r: 1, g: 0.6947569, b: 0, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -766,8 +773,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 32
+  m_fontSizeBase: 32
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1286,8 +1293,8 @@ MonoBehaviour:
   squatTimeout: 0.5
   startCooldown: 2
   correctMessage: "\u305B\u3044\u304B\u3044\uFF01"
-  wrongMessage: "\u3056\u3093\u306D\u3093\uFF01\n\u3053\u305F\u3048\u306F\u300C{0}\u300D"
-  timeUpMessage: "\u3058\u304B\u3093\u304E\u308C\uFF01\n\u3053\u305F\u3048\u306F\u300C{0}\u300D"
+  wrongMessage: "\u3056\u3093\u306D\u3093\uFF01"
+  timeUpMessage: "\u3058\u304B\u3093\u304E\u308C\uFF01"
   resultDuration: 3
   timeLimit: 0
   sfxSource: {fileID: 0}
@@ -1301,7 +1308,7 @@ MonoBehaviour:
   wrongVolume: 1
   timeUpSound: {fileID: 8300000, guid: a9aab724283ab4b73833d013c92affa7, type: 3}
   timeUpVolume: 1
-  enableKeyboard: 0
+  enableKeyboard: 1
   showDebugInfo: 0
 --- !u!4 &1138582478
 Transform:

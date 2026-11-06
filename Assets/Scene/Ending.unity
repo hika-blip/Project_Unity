@@ -975,10 +975,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   TitleBGM1: {fileID: 8300000, guid: a11e2a349da7d420287f9d616ded6daf, type: 3}
   BGM1Volume: 0.5
+  BGM1Loop: 1
   TitleBGM2: {fileID: 8300000, guid: 116c1bc1d53e64c5f881603cb4e60be9, type: 3}
   BGM2Volume: 1
+  BGM2Loop: 0
   TitleBGM3: {fileID: 0}
   BGM3Volume: 1
+  BGM3Loop: 1
   BGM3StartDelay: 0
   BGM3Interval: 5
 --- !u!4 &1692136949
