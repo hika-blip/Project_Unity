@@ -40,6 +40,12 @@ public class BugCatcher2 : MonoBehaviour
     public AudioSource audioSource;
     public AudioClip getCatchSound;
     public AudioClip failureCatchSound;
+    [Tooltip("照準が「獲得可能」に変わったときに流す音")]
+    public AudioClip scopeActiveSound;
+    [Range(0f, 1f)] public float scopeActiveVolume = 1.0f;
+    [Tooltip("この秒数以内に何度も「獲得可能」になっても、音は1回だけ鳴らす(範囲のふちで切り替わり続けるときの連続再生を防ぐ)")]
+    public float scopeActiveSoundCooldown = 0.5f;
+    private float lastScopeActiveSoundTime = -999f;
 
     // テキスト表示クールダウン
     private float lastTextDisplayTime = -999f;
@@ -283,6 +289,14 @@ public class BugCatcher2 : MonoBehaviour
                 if (scopeRectTransform != null)
                 {
                     scopeRectTransform.localScale = Vector3.one * activeScopeScale;
+                }
+
+                // 照準のイラストの切り替えと同時に音を流す
+                if (scopeActiveSound != null && audioSource != null &&
+                    Time.time - lastScopeActiveSoundTime >= scopeActiveSoundCooldown)
+                {
+                    audioSource.PlayOneShot(scopeActiveSound, scopeActiveVolume);
+                    lastScopeActiveSoundTime = Time.time;
                 }
             }
             else

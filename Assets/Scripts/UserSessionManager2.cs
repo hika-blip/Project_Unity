@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Sockets;
 using System.Text;
 using UnityEngine;
 
@@ -55,8 +56,44 @@ public class UserSessionManager : MonoBehaviour
     [Tooltip("ゾーン選択履歴を記録")]
     public bool recordZoneSelection = true;
 
+    [Header("Python(骨格推定)への合図")]
+    [Tooltip("セッション開始時に START、終了時に END を Python に送る")]
+    public bool sendCommandToPython = true;
+    [Tooltip("dual_camera.py の PORT_COMMAND と同じにする")]
+    public int pythonCommandPort = 9989;
+    public string pythonHost = "127.0.0.1";
+    private UdpClient pythonClient;
+
     private float autoSaveTimer = 0f;
     private DateTime applicationStartTime; // アプリケーション開始時刻
+
+    /// <summary>
+    /// Python に "START" / "END" をUDPで送る
+    /// </summary>
+    private void SendToPython(string command)
+    {
+        if (!sendCommandToPython) return;
+        try
+        {
+            if (pythonClient == null) pythonClient = new UdpClient();
+            byte[] data = Encoding.UTF8.GetBytes(command);
+            pythonClient.Send(data, data.Length, pythonHost, pythonCommandPort);
+            Debug.Log($"[Python] {command} を送信 ({pythonHost}:{pythonCommandPort})");
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[Python] {command} の送信に失敗: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 同じユーザー(セッション)のまま、Python にもう一度 START を送る
+    /// (Python のユーザー判定が失敗したときのやり直し用。QRコードを読み直さなくてよい)
+    /// </summary>
+    public void SendPythonStart()
+    {
+        SendToPython("START");
+    }
 
     /// <summary>
     /// 保存先のベースパスを取得
@@ -225,6 +262,9 @@ public class UserSessionManager : MonoBehaviour
         currentSceneName = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
         currentSceneEnterTime = DateTime.Now;
 
+        // Python に骨格推定の開始を知らせる(QRコード読み取り時)
+        SendToPython("START");
+
         Debug.Log($"=== セッション開始 ===");
         Debug.Log($"UserID: {userID}");
         Debug.Log($"開始時刻: {currentSession.SessionStartTime:yyyy-MM-dd HH:mm:ss.fff}");
@@ -315,6 +355,9 @@ public class UserSessionManager : MonoBehaviour
             currentSceneName = "";
             tutorialStartTime = -1f;
             tutorialEndTime = -1f;
+
+            // Python に骨格推定の終了を知らせる(ending シーン到達時・アプリ終了時)
+            SendToPython("END");
         }
         else
         {
@@ -817,6 +860,7 @@ public class UserSessionManager : MonoBehaviour
         {
             Debug.Log("=== UserSessionManager破棄 ===");
             ExportToCSV(endCurrentSession: true);
+            pythonClient?.Close();
         }
     }
 }

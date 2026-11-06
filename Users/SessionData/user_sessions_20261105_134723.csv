@@ -1,0 +1,2 @@
+﻿UserID,SessionStart,SessionEnd,TotalPlayTime(sec),TutorialTime(sec),ForestStayTime(sec),ZoneSelectionCount,ZoneSelections,SceneTransitions,CustomEvents,QuizQuestionIDs,QuizCorrectCount,QuizResults
+0BBC,2026-11-05 13:47:36,2026-11-05 13:48:08,31.45,0.00,0.00,0,,,QRCodeScanned:0BBC(13:47:36); PythonCalibrationFailed:Count=1(13:47:39); PythonCalibrationFailed:Count=2(13:47:43),,0,

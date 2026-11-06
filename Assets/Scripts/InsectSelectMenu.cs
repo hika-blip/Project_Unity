@@ -19,7 +19,10 @@ using TMPro;
 /// ・キャリブレーション済みの鼻のx（= キャリブレーション位置からのずれ）が
 ///   右に一定以上なら右の選択肢へ、左なら左の選択肢へ進む
 ///   （中央のまわりは余裕（不感帯）。出し続けると一定間隔で1つずつ進む）
-/// ・選択中のカードは拡大、それ以外はグレーのレイヤーをかける
+/// ・画面下部に全ての選択肢を並べ、選択中のものが列の中央に来るように回転する
+///   （端どうしはつながっていて、右端の次は左端に戻る）
+/// ・選択中のものは画面中央に大きく表示する
+/// ・ユーザの立ち位置（鼻のx）をカーソルで表示する
 /// ・しゃがみ（UDP 9993）で決定
 ///
 /// 受信するUDP（dual_camera_gesture_udp.py）
@@ -48,22 +51,30 @@ public class InsectSelectMenu : MonoBehaviour
     [Tooltip("このキーで直接Endingへ移動（デバッグ用）")]
     public KeyCode endingKey = KeyCode.E;
 
-    [Header("UI")]
-    [Tooltip("カードを並べる親。アンカー・ピボットは中央にしておく")]
+    [Header("下部の選択肢一覧（全ての選択肢を並べる）")]
+    [Tooltip("一覧のカードを並べる親。画面下部に置き、アンカー・ピボットは中央にしておく")]
     public RectTransform content;
     [Tooltip("子に Icon(Image) / Label(TextMeshProUGUI) / Dim(Image) を持つカードのPrefab")]
     public GameObject cardPrefab;
-    public float cardSpacing = 320f;     // カード中心どうしの間隔(px)
-    public float selectedScale = 1.2f;   // 選択中カードの大きさ
-    public float normalScale = 0.9f;     // 選択されていないカードの大きさ
+    public float cardSpacing = 200f;     // 一覧のカード中心どうしの間隔(px)。全部が画面に収まる値にする
+    public float selectedScale = 1.1f;   // 一覧で選択中のカードの大きさ
+    public float normalScale = 0.8f;     // 一覧で選択されていないカードの大きさ
     [Range(0f, 1f)] public float dimAlpha = 0.6f; // 選択外カードのグレーの濃さ
     public float animSpeed = 10f;        // 見た目の追従の速さ
 
-    [Header("カード列の位置")]
-    [Tooltip("カード列全体の上下位置(px)。マイナスにすると下がる（上にタイトルを置く場合など）。再生中に変えてもすぐ反映される")]
+    [Header("一覧の位置")]
+    [Tooltip("一覧全体の上下位置(px)。contentの位置からのずらし量")]
     public float cardsOffsetY = 0f;
-    [Tooltip("カード列全体の左右位置(px)。プラスで右へ。選択中のカードはこの位置に来る")]
+    [Tooltip("一覧全体の左右位置(px)。選択中のカードはこの位置に来る")]
     public float cardsOffsetX = 0f;
+
+    [Header("中央の大きな表示")]
+    [Tooltip("選択中のものを大きく表示する場所（画面中央に置く空のRectTransform）。カードPrefabをここに生成する")]
+    public RectTransform featuredParent;
+    [Tooltip("中央に表示するカードの大きさ")]
+    public float featuredScale = 2.5f;
+    [Tooltip("選択が変わったとき、少し小さい状態から戻すポップ演出の強さ（0で演出なし）")]
+    [Range(0f, 0.5f)] public float featuredPop = 0.15f;
 
     [Header("左右の矢印（任意）")]
     [Tooltip("左に移動中に光らせる矢印")]
@@ -74,6 +85,24 @@ public class InsectSelectMenu : MonoBehaviour
     public Color arrowActiveColor = new Color(1f, 0.85f, 0.2f, 1f);
     [Tooltip("次の選択肢に進むまでの溜まり具合を表示するゲージ（Image Type=Filled。任意）")]
     public Image stepGaugeImage;
+
+    [Header("立ち位置カーソル（任意）")]
+    [Tooltip("カーソルが動く横長のバー。この幅がカーソルの可動範囲になる")]
+    public RectTransform cursorTrack;
+    [Tooltip("ユーザの立ち位置を示すカーソル（cursorTrackの子に置き、アンカー・ピボットは中央にしておく）")]
+    public RectTransform cursor;
+    [Tooltip("立ち位置のずれがこの値のとき、カーソルがバーの端に来る（正規化座標）")]
+    public float cursorRange = 0.4f;
+    [Tooltip("左に進む境目を示す目印（任意。cursorTrackの子。自動で -Move Threshold の位置に置く）")]
+    public RectTransform leftThresholdMarker;
+    [Tooltip("右に進む境目を示す目印（任意。cursorTrackの子。自動で +Move Threshold の位置に置く）")]
+    public RectTransform rightThresholdMarker;
+    [Tooltip("カーソルの色を変えるImage（空欄ならcursorから自動で探す）")]
+    public Image cursorImage;
+    public Color cursorIdleColor = Color.white;
+    public Color cursorMoveColor = new Color(1f, 0.85f, 0.2f, 1f);
+    [Tooltip("カーソルの追従の速さ")]
+    public float cursorSmooth = 15f;
 
     [Header("UDPポート")]
     public int squatPort = 9993;
@@ -132,7 +161,20 @@ public class InsectSelectMenu : MonoBehaviour
     private UdpFloatReceiver squatRecv;
 
     // 表示用
-    private float displayPos;
+    private float targetPos;   // 選択位置（端をまたぐたびに増減し続ける。表示の回転用）
+    private float displayPos;  // targetPosに追従する表示上の位置
+
+    // 中央の大きな表示
+    private RectTransform featuredRect;
+    private Image featuredBg, featuredIconImg;
+    private TextMeshProUGUI featuredLabelText;
+    private int featuredShownIndex = -1;
+    private float featuredPopTimer = 0f;
+
+    // カーソル
+    private bool hasNose;
+    private float lastDx;
+    private float cursorX;
 
     // 鼻の状態（デバッグ表示用）
     private string noseState = "-";
@@ -153,6 +195,7 @@ public class InsectSelectMenu : MonoBehaviour
     {
         public RectTransform rect;
         public Image dim;
+        public CanvasGroup group;
     }
     private readonly List<CardView> cards = new List<CardView>();
 
@@ -184,6 +227,8 @@ public class InsectSelectMenu : MonoBehaviour
         }
 
         BuildCards();
+        BuildFeatured();
+        if (cursorImage == null && cursor != null) cursorImage = cursor.GetComponent<Image>();
         StartReceivers();
 
         // 前回観察した昆虫のカードから始める
@@ -193,7 +238,8 @@ public class InsectSelectMenu : MonoBehaviour
             int idx = items.FindIndex(it => it.zoneNumber == SelectionData.SelectedZone && it.zoneNumber >= 1);
             if (idx >= 0) SelectedIndex = idx;
         }
-        displayPos = SelectedIndex;
+        targetPos = SelectedIndex;
+        displayPos = targetPos;
 
         centerConfirmed = !requireCenterAtStart;
         inputEnabledTime = Time.time + startCooldown;
@@ -235,27 +281,11 @@ public class InsectSelectMenu : MonoBehaviour
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = new Vector2(i * cardSpacing, 0f);
 
-            Image bg = go.GetComponent<Image>();
-            if (bg != null) bg.color = items[i].cardColor;
+            ApplyItemToCard(go, items[i]);
 
-            Transform iconT = go.transform.Find("Icon");
-            if (iconT != null)
-            {
-                Image icon = iconT.GetComponent<Image>();
-                if (icon != null)
-                {
-                    icon.sprite = items[i].icon;
-                    icon.enabled = items[i].icon != null;
-                    icon.preserveAspect = true;
-                }
-            }
-
-            Transform labelT = go.transform.Find("Label");
-            if (labelT != null)
-            {
-                TextMeshProUGUI label = labelT.GetComponent<TextMeshProUGUI>();
-                if (label != null) label.text = items[i].label;
-            }
+            // 端をまたいで反対側へ回り込むときに、フェードさせるため
+            CanvasGroup group = go.GetComponent<CanvasGroup>();
+            if (group == null) group = go.AddComponent<CanvasGroup>();
 
             Image dim = null;
             Transform dimT = go.transform.Find("Dim");
@@ -265,8 +295,72 @@ public class InsectSelectMenu : MonoBehaviour
                 dimT.SetAsLastSibling();
             }
 
-            cards.Add(new CardView { rect = rt, dim = dim });
+            cards.Add(new CardView { rect = rt, dim = dim, group = group });
         }
+    }
+
+    /// <summary>カードPrefabの見た目（背景色・アイコン・名前）を選択肢の内容にする</summary>
+    private void ApplyItemToCard(GameObject go, MenuItem item)
+    {
+        Image bg = go.GetComponent<Image>();
+        if (bg != null) bg.color = item.cardColor;
+
+        Transform iconT = go.transform.Find("Icon");
+        if (iconT != null)
+        {
+            Image icon = iconT.GetComponent<Image>();
+            if (icon != null)
+            {
+                icon.sprite = item.icon;
+                icon.enabled = item.icon != null;
+                icon.preserveAspect = true;
+            }
+        }
+
+        Transform labelT = go.transform.Find("Label");
+        if (labelT != null)
+        {
+            TextMeshProUGUI label = labelT.GetComponent<TextMeshProUGUI>();
+            if (label != null) label.text = item.label;
+        }
+    }
+
+    /// <summary>画面中央の大きな表示を、カードPrefabから作る</summary>
+    private void BuildFeatured()
+    {
+        if (featuredParent == null || cardPrefab == null) return;
+
+        GameObject go = Instantiate(cardPrefab, featuredParent);
+        go.name = "FeaturedCard";
+        featuredRect = go.GetComponent<RectTransform>();
+        featuredRect.anchorMin = featuredRect.anchorMax = new Vector2(0.5f, 0.5f);
+        featuredRect.pivot = new Vector2(0.5f, 0.5f);
+        featuredRect.anchoredPosition = Vector2.zero;
+        featuredRect.localScale = Vector3.one * featuredScale;
+
+        // 中央の表示にはグレーのレイヤーは不要
+        Transform dimT = go.transform.Find("Dim");
+        if (dimT != null) dimT.gameObject.SetActive(false);
+    }
+
+    /// <summary>中央の大きな表示を、選択中の選択肢に合わせる</summary>
+    private void UpdateFeatured(bool immediate)
+    {
+        if (featuredRect == null || items.Count == 0) return;
+
+        if (featuredShownIndex != SelectedIndex)
+        {
+            featuredShownIndex = SelectedIndex;
+            ApplyItemToCard(featuredRect.gameObject, items[SelectedIndex]);
+            featuredPopTimer = immediate ? 0f : 1f;
+        }
+
+        if (decided) return; // 決定演出中はDecideRoutine側で大きさを動かす
+
+        // 選択が変わった直後だけ、少し小さい状態からふわっと戻す
+        featuredPopTimer = Mathf.Max(0f, featuredPopTimer - Time.deltaTime * animSpeed * 0.5f);
+        float scale = featuredScale * (1f - featuredPop * featuredPopTimer);
+        featuredRect.localScale = Vector3.one * scale;
     }
 
     // ------------------------------------------------------------
@@ -284,11 +378,14 @@ public class InsectSelectMenu : MonoBehaviour
             dx = pos.x;
             if (invertX) dx = -dx;
             noseState = $"x:{pos.x:F3}  ずれ(右が+):{dx:F3}";
+            hasNose = true;
         }
         else
         {
             noseState = "CalibrationManagerなし";
+            hasNose = false;
         }
+        lastDx = dx;
 
         // 今どちら側にずれているか（入る位置と戻る位置を分けてパタパタ防止）
         int dir = moveDir;
@@ -333,13 +430,14 @@ public class InsectSelectMenu : MonoBehaviour
 
     private void Step(int dir)
     {
-        int next = Mathf.Clamp(SelectedIndex + dir, 0, items.Count - 1);
-        if (next != SelectedIndex)
-        {
-            SelectedIndex = next;
-            PlaySfx(selectSound, selectVolume); // 選択肢が実際に切り替わったときだけ鳴らす（端では鳴らない）
-            Debug.Log($"[InsectSelectMenu] 選択: {items[SelectedIndex].label}");
-        }
+        int n = items.Count;
+        if (n <= 1) return;
+
+        // 端どうしはつながっている（右端の次は左端、左端の前は右端）
+        SelectedIndex = ((SelectedIndex + dir) % n + n) % n;
+        targetPos += dir; // 表示は端をまたいでも同じ向きに回り続ける
+        PlaySfx(selectSound, selectVolume);
+        Debug.Log($"[InsectSelectMenu] 選択: {items[SelectedIndex].label}");
     }
 
     private void PlaySfx(AudioClip clip, float volume)
@@ -395,14 +493,17 @@ public class InsectSelectMenu : MonoBehaviour
     private IEnumerator DecideRoutine(MenuItem item)
     {
         // 決定した感を出すため、選択中カードを一瞬大きくする
-        RectTransform rt = cards.Count > SelectedIndex ? cards[SelectedIndex].rect : null;
+        // 中央の大きな表示があればそれを、なければ一覧の選択中カードを動かす
+        RectTransform rt = featuredRect != null ? featuredRect
+                         : (cards.Count > SelectedIndex ? cards[SelectedIndex].rect : null);
+        float baseScale = featuredRect != null ? featuredScale : selectedScale;
         float t = 0f;
         while (t < decideDelay)
         {
             t += Time.deltaTime;
             if (rt != null)
             {
-                float pulse = selectedScale * (1f + 0.15f * Mathf.Sin(Mathf.Clamp01(t / decideDelay) * Mathf.PI));
+                float pulse = baseScale * (1f + 0.15f * Mathf.Sin(Mathf.Clamp01(t / decideDelay) * Mathf.PI));
                 rt.localScale = Vector3.one * pulse;
             }
             yield return null;
@@ -493,21 +594,36 @@ public class InsectSelectMenu : MonoBehaviour
         if (content == null) return;
 
         float k = immediate ? 1f : 1f - Mathf.Exp(-animSpeed * Time.deltaTime);
+        int n = cards.Count;
 
-        // 選択中のカードが基準位置（cardsOffsetX, cardsOffsetY）に来るように全体をずらす
-        displayPos = Mathf.Lerp(displayPos, SelectedIndex, k);
-        content.anchoredPosition = new Vector2(cardsOffsetX - displayPos * cardSpacing, cardsOffsetY);
+        content.anchoredPosition = new Vector2(cardsOffsetX, cardsOffsetY);
+        displayPos = immediate ? targetPos : Mathf.Lerp(displayPos, targetPos, k);
 
-        for (int i = 0; i < cards.Count; i++)
+        // 選択中のカードが中央に来るように、全カードを円環状に並べる
+        // （範囲 [lo, lo+n) に収まるように折り返す。lo は境目がカードとカードの間に来るように決める）
+        float lo = -Mathf.Floor(n / 2f) - 0.5f;
+
+        for (int i = 0; i < n; i++)
         {
             bool selected = i == SelectedIndex;
             CardView c = cards[i];
 
-            if (!(decided && selected)) // 決定演出中のカードはDecideRoutine側で大きさを動かす
+            float offset = Mathf.Repeat(i - displayPos - lo, n) + lo;
+            c.rect.anchoredPosition = new Vector2(offset * cardSpacing, 0f);
+
+            // 端の境目をまたぐカードはフェードさせる（反対側に瞬間移動するのを目立たなくする）
+            if (c.group != null)
+            {
+                float distToSeam = Mathf.Min(offset - lo, lo + n - offset);
+                c.group.alpha = Mathf.Clamp01(distToSeam / 0.5f);
+            }
+
+            // 中央の表示がないときは、決定演出中のカードはDecideRoutine側で大きさを動かす
+            if (!(featuredRect == null && decided && selected))
             {
                 float targetScale = selected ? selectedScale : normalScale;
-                float s = immediate ? targetScale : Mathf.Lerp(c.rect.localScale.x, targetScale, k);
-                c.rect.localScale = Vector3.one * s;
+                float sc = immediate ? targetScale : Mathf.Lerp(c.rect.localScale.x, targetScale, k);
+                c.rect.localScale = Vector3.one * sc;
             }
 
             if (c.dim != null)
@@ -521,23 +637,54 @@ public class InsectSelectMenu : MonoBehaviour
             if (selected) c.rect.SetAsLastSibling();
         }
 
-        // 左右の矢印：進んでいる方向を光らせる（端でそれ以上進めない方向は光らせない）
-        bool canLeft = SelectedIndex > 0;
-        bool canRight = SelectedIndex < items.Count - 1;
+        UpdateFeatured(immediate);
+
+        // 左右の矢印：進んでいる方向を光らせる（端はつながっているので常に進める）
+        bool canMove = n > 1 && !decided;
         if (leftArrow != null)
-            leftArrow.color = (moveDir == -1 && canLeft && !decided) ? arrowActiveColor : arrowIdleColor;
+            leftArrow.color = (moveDir == -1 && canMove) ? arrowActiveColor : arrowIdleColor;
         if (rightArrow != null)
-            rightArrow.color = (moveDir == 1 && canRight && !decided) ? arrowActiveColor : arrowIdleColor;
+            rightArrow.color = (moveDir == 1 && canMove) ? arrowActiveColor : arrowIdleColor;
 
         // 次の1歩までの溜まり具合
         if (stepGaugeImage != null)
         {
-            bool canMove = (moveDir == 1 && canRight) || (moveDir == -1 && canLeft);
-            if (canMove && !decided && currentStepWait > 0f)
+            if (moveDir != 0 && canMove && currentStepWait > 0f)
                 stepGaugeImage.fillAmount = 1f - Mathf.Clamp01((nextStepTime - Time.time) / currentStepWait);
             else
                 stepGaugeImage.fillAmount = 0f;
         }
+
+        UpdateCursor(immediate);
+    }
+
+    /// <summary>ユーザの立ち位置（鼻のx）をカーソルで表示する</summary>
+    private void UpdateCursor(bool immediate)
+    {
+        if (cursorTrack == null || cursor == null) return;
+
+        float half = cursorTrack.rect.width * 0.5f;
+        float range = Mathf.Max(cursorRange, 0.01f);
+
+        // 進む境目の目印
+        float markerX = Mathf.Clamp(moveThreshold / range, -1f, 1f) * half;
+        if (leftThresholdMarker != null)
+            leftThresholdMarker.anchoredPosition = new Vector2(-markerX, leftThresholdMarker.anchoredPosition.y);
+        if (rightThresholdMarker != null)
+            rightThresholdMarker.anchoredPosition = new Vector2(markerX, rightThresholdMarker.anchoredPosition.y);
+
+        // 鼻が取れていないときはカーソルを隠す
+        if (cursor.gameObject.activeSelf != hasNose) cursor.gameObject.SetActive(hasNose);
+        if (!hasNose) return;
+
+        float targetX = Mathf.Clamp(lastDx / range, -1f, 1f) * half;
+        float k = immediate ? 1f : 1f - Mathf.Exp(-cursorSmooth * Time.deltaTime);
+        cursorX = Mathf.Lerp(cursorX, targetX, k);
+        cursor.anchoredPosition = new Vector2(cursorX, cursor.anchoredPosition.y);
+
+        // 左右に進んでいる間は色を変える
+        if (cursorImage != null)
+            cursorImage.color = moveDir != 0 ? cursorMoveColor : cursorIdleColor;
     }
 
     // ------------------------------------------------------------
@@ -568,7 +715,7 @@ public class InsectSelectMenu : MonoBehaviour
         GUILayout.Label($"鼻: {noseState}");
         GUILayout.Label($"キャリブレーション使用: {useCalibration}  (進む: ±{moveThreshold:F2} / 戻る: ±{returnThreshold:F2})");
         GUILayout.Label($"方向: {(moveDir == 1 ? "右" : moveDir == -1 ? "左" : "中央")}  中央確認: {centerConfirmed}");
-        GUILayout.Label($"選択中: [{SelectedIndex}] {(items.Count > 0 ? items[SelectedIndex].label : "-")}");
+        GUILayout.Label($"選択中: [{SelectedIndex}] {(items.Count > 0 ? items[SelectedIndex].label : "-")}  ({items.Count}個)");
         GUILayout.EndArea();
     }
 }

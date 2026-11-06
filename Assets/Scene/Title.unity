@@ -312,9 +312,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   TitleBGM1: {fileID: 8300000, guid: 443f86a9b37af4f4590b80c0c10540c2, type: 3}
-  BGM1Volume: 1
+  BGM1Volume: 0.75
   TitleBGM2: {fileID: 8300000, guid: 32c579d70d1c64d48b862cc6eaa57ead, type: 3}
-  BGM2Volume: 0.6
+  BGM2Volume: 0.25
 --- !u!4 &636505994
 Transform:
   m_ObjectHideFlags: 0
@@ -842,6 +842,9 @@ MonoBehaviour:
   - Forest
   recordTutorialTime: 1
   recordZoneSelection: 1
+  sendCommandToPython: 1
+  pythonCommandPort: 9989
+  pythonHost: 127.0.0.1
 --- !u!1 &1552182626
 GameObject:
   m_ObjectHideFlags: 0
@@ -1271,6 +1274,27 @@ MonoBehaviour:
   bobSpeed: 1.8
   nextSceneName: Forest
   calibrationManager: {fileID: 1113278706}
+  usePythonCalibrationResult: 1
+  calibResultPort: 9988
+  pythonResultTimeout: 6
+  pythonRetryDelay: 0.5
+  maxPythonRetries: 0
+  calibFailText: "\u3072\u3068\u308A\u3067\u9EC4\u8272\u3044\u305B\u3093\u306B\n\u305F\u3063\u3066\u304F\u3060\u3055\u3044"
+  pythonCalibSeconds: 1
+  cancelKey: 27
+  cancelText: "ID\u3092\u3068\u308A\u3051\u3057\u307E\u3057\u305F"
+  voiceSource: {fileID: 0}
+  voiceVolume: 1
+  idleVoices:
+  - {fileID: 8300000, guid: 86a64f3fd91cf48bbba17f4a4b438f19, type: 3}
+  - {fileID: 8300000, guid: 370025e8586f34c0681d432b8f6c8cb0, type: 3}
+  idleVoiceInterval: 5
+  standOnLineVoice: {fileID: 8300000, guid: b0214f69cd61b40b3af044c245df1540, type: 3}
+  standOnLineFirstDelay: 0.5
+  standOnLineInterval: 4
+  replayStandOnLineOnFail: 1
+  readyVoice: {fileID: 8300000, guid: 3e65b46ce80684aad8eaa38ed6960d1f, type: 3}
+  waitReadyVoiceBeforeSceneChange: 1
 --- !u!4 &1907019027
 Transform:
   m_ObjectHideFlags: 0

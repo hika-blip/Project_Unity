@@ -174880,9 +174880,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   TitleBGM1: {fileID: 8300000, guid: 443f86a9b37af4f4590b80c0c10540c2, type: 3}
-  BGM1Volume: 1
+  BGM1Volume: 0.75
   TitleBGM2: {fileID: 8300000, guid: 32c579d70d1c64d48b862cc6eaa57ead, type: 3}
-  BGM2Volume: 0.6
+  BGM2Volume: 0.25
 --- !u!4 &1217185814
 Transform:
   m_ObjectHideFlags: 0
@@ -175374,7 +175374,7 @@ MonoBehaviour:
   - {fileID: 510089182}
   - {fileID: 1660478169}
   - {fileID: 1496509978}
-  detectCatchByDeactivation: 1
+  detectCatchByDeactivation: 0
   recordTutorialData: 1
   allowSkip: 1
   skipKey: 27
@@ -175383,11 +175383,11 @@ MonoBehaviour:
   videoRawImage2: {fileID: 617325333}
   videoPlayer2: {fileID: 617325330}
   voiceSource: {fileID: 0}
-  voicePhase1: {fileID: 0}
-  voicePhase3: {fileID: 0}
+  voicePhase1: {fileID: 8300000, guid: 2f380c03f897946cc89b921d2c3b6255, type: 3}
+  voicePhase3: {fileID: 8300000, guid: 4c19c92133c1d4471a9c9db241200524, type: 3}
   voicePhase4: {fileID: 0}
-  voicePhase5: {fileID: 0}
-  voiceComplete: {fileID: 0}
+  voicePhase5: {fileID: 8300000, guid: cce3811ebf6034826bdc680eb09e3c6e, type: 3}
+  voiceComplete: {fileID: 8300000, guid: fe112d63fb15f4a8181c563bed63520a, type: 3}
   voiceVolume: 1
   waitForVoiceToFinish: 1
   voiceRepeatInterval: 8
@@ -177604,6 +177604,9 @@ MonoBehaviour:
   audioSource: {fileID: 0}
   getCatchSound: {fileID: 8300000, guid: 0d3c2b1db17b940eea99fa04999aa8c7, type: 3}
   failureCatchSound: {fileID: 8300000, guid: 925bace2746f84cc2a0540b8dc36aef6, type: 3}
+  scopeActiveSound: {fileID: 8300000, guid: 46fbaa673db654e1395dc3435967fdd8, type: 3}
+  scopeActiveVolume: 1
+  scopeActiveSoundCooldown: 0.5
   recordBugCatchData: 1
   scopeImage: {fileID: 1924157842}
   normalScopeSprite: {fileID: 21300000, guid: f87cb6c620b5640cfb2518dfb41530f3, type: 3}

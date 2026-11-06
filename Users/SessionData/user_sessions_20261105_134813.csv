@@ -1,0 +1,2 @@
+﻿UserID,SessionStart,SessionEnd,TotalPlayTime(sec),TutorialTime(sec),ForestStayTime(sec),ZoneSelectionCount,ZoneSelections,SceneTransitions,CustomEvents,QuizQuestionIDs,QuizCorrectCount,QuizResults
+0BBC,2026-11-05 13:48:18,2026-11-05 13:48:37,19.53,0.00,9.86,0,,Title→Forest(13:48:27); Forest→Forest(13:48:30),"QRCodeScanned:0BBC(13:48:18); CalibrationCompleted:Offset=(0.653,0.594,-0.351)(13:48:26); ForestSceneStart:(13:48:30); TutorialManagerStart:Time=17.46(13:48:34); TutorialStart:(13:48:34)",,0,

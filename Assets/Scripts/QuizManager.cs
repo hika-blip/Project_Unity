@@ -87,11 +87,23 @@ public class QuizManager : MonoBehaviour
     [Tooltip("制限時間（秒）。0以下なら制限なし")]
     public float timeLimit = 0f;
 
-    [Header("効果音（任意）")]
+    [Header("効果音（任意。空欄なら鳴らさない）")]
     public AudioSource sfxSource;
+    [Tooltip("クイズシーンに入ったとき（問題を表示したとき）")]
+    public AudioClip startSound;
+    [Range(0f, 1f)] public float startVolume = 1.0f;
+    [Tooltip("選んでいる区画が変わったとき")]
     public AudioClip selectSound;
+    [Range(0f, 1f)] public float selectVolume = 0.8f;
+    [Tooltip("正解したとき")]
     public AudioClip correctSound;
+    [Range(0f, 1f)] public float correctVolume = 1.0f;
+    [Tooltip("不正解だったとき")]
     public AudioClip wrongSound;
+    [Range(0f, 1f)] public float wrongVolume = 1.0f;
+    [Tooltip("時間切れのとき（空欄なら不正解の音を鳴らす）")]
+    public AudioClip timeUpSound;
+    [Range(0f, 1f)] public float timeUpVolume = 1.0f;
 
     [Header("その他")]
     [Tooltip("1〜4キーで選択、Enter/Spaceで決定")]
@@ -150,6 +162,8 @@ public class QuizManager : MonoBehaviour
         current = candidates[UnityEngine.Random.Range(0, candidates.Count)];
         ShuffleChoices();
         ShowQuestion();
+
+        PlaySfx(startSound, startVolume);
 
         StartReceivers();
         questionStartTime = Time.time;
@@ -296,7 +310,7 @@ public class QuizManager : MonoBehaviour
         if (slot != selectedSlot)
         {
             selectedSlot = slot;
-            PlaySfx(selectSound);
+            PlaySfx(selectSound, selectVolume);
         }
         debugState = $"x:{dx:F3}  区画:{(selectedSlot >= 0 ? (selectedSlot + 1).ToString() : "-")}";
     }
@@ -322,7 +336,7 @@ public class QuizManager : MonoBehaviour
         {
             if (Input.GetKeyDown(KeyCode.Alpha1 + i) || Input.GetKeyDown(KeyCode.Keypad1 + i))
             {
-                if (selectedSlot != i) PlaySfx(selectSound);
+                if (selectedSlot != i) PlaySfx(selectSound, selectVolume);
                 selectedSlot = i;
             }
         }
@@ -368,6 +382,8 @@ public class QuizManager : MonoBehaviour
         float responseTime = Time.time - questionStartTime;
 
         Record(true, correct, displayChoices[slot], slot, responseTime);
+        if (correct) PlaySfx(correctSound, correctVolume);
+        else PlaySfx(wrongSound, wrongVolume);
         ShowResult(correct ? correctMessage : string.Format(wrongMessage, displayChoices[correctSlot]), correct, slot);
     }
 
@@ -377,6 +393,8 @@ public class QuizManager : MonoBehaviour
         float responseTime = Time.time - questionStartTime;
 
         Record(false, false, "", -1, responseTime);
+        if (timeUpSound != null) PlaySfx(timeUpSound, timeUpVolume);
+        else PlaySfx(wrongSound, wrongVolume);
         ShowResult(string.Format(timeUpMessage, displayChoices[correctSlot]), false, -1);
     }
 
@@ -399,7 +417,6 @@ public class QuizManager : MonoBehaviour
             resultText.text = message;
         }
 
-        PlaySfx(correct ? correctSound : wrongSound);
         StartCoroutine(ReturnAfterDelay());
     }
 
@@ -445,9 +462,9 @@ public class QuizManager : MonoBehaviour
         }
     }
 
-    private void PlaySfx(AudioClip clip)
+    private void PlaySfx(AudioClip clip, float volume)
     {
-        if (sfxSource != null && clip != null) sfxSource.PlayOneShot(clip);
+        if (sfxSource != null && clip != null) sfxSource.PlayOneShot(clip, volume);
     }
 
     // ------------------------------------------------------------
