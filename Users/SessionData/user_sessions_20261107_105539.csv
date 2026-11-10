@@ -1,0 +1,2 @@
+﻿UserID,SessionStart,SessionEnd,TotalPlayTime(sec),TutorialTime(sec),ForestStayTime(sec),ZoneSelectionCount,ZoneSelections,SceneTransitions,CustomEvents,QuizQuestionIDs,QuizCorrectCount,QuizResults
+debug_user,2026-11-07 10:55:59,2026-11-07 10:56:16,17.50,0.00,0.00,0,,,QRCodeScanned:debug_user(10:55:59),,0,

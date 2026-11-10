@@ -1,8 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class TitleSoundManager : MonoBehaviour
+public class TitleSoundManager2 : MonoBehaviour
 {
     [Header("BGM1設定")]
     public AudioClip TitleBGM1;
@@ -33,6 +34,19 @@ public class TitleSoundManager : MonoBehaviour
     private AudioSource audioSource3;
     private Coroutine bgm3Routine;
 
+    [Header("BGM4設定（一定時間を空けてループ）")]
+    public AudioClip TitleBGM4;
+    [Range(0f, 1f)]
+    public float BGM4Volume = 1f;
+    [Tooltip("ONで一定時間を空けてループ再生、OFFで1回だけ再生")]
+    public bool BGM4Loop = true;
+    [Tooltip("シーン開始から最初に再生するまでの秒数")]
+    public float BGM4StartDelay = 0f;
+    [Tooltip("再生が終わってから、次に再生するまでの秒数")]
+    public float BGM4Interval = 5f;
+    private AudioSource audioSource4;
+    private Coroutine bgm4Routine;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -58,23 +72,40 @@ public class TitleSoundManager : MonoBehaviour
             audioSource2.Play(); // 手動で再生
         }
 
-        // BGM3のAudioSource設定（ループはコルーチンで間隔を空けて行う）
-        audioSource3 = gameObject.AddComponent<AudioSource>();
-        audioSource3.clip = TitleBGM3;
-        audioSource3.volume = BGM3Volume;
-        audioSource3.loop = false; // 自動ループはOFF（間隔を空けるため）
-        audioSource3.playOnAwake = false; // Awake時には再生しない
+        // BGM3・BGM4のAudioSource設定（ループはコルーチンで間隔を空けて行う）
+        audioSource3 = CreateIntervalSource(TitleBGM3, BGM3Volume);
+        audioSource4 = CreateIntervalSource(TitleBGM4, BGM4Volume);
+
         if (TitleBGM3 != null)
         {
-            bgm3Routine = StartCoroutine(PlayBGM3WithInterval(BGM3StartDelay));
+            bgm3Routine = StartCoroutine(PlayWithInterval(
+                audioSource3, BGM3StartDelay, () => BGM3Loop, () => BGM3Interval, () => bgm3Routine = null));
+        }
+        if (TitleBGM4 != null)
+        {
+            bgm4Routine = StartCoroutine(PlayWithInterval(
+                audioSource4, BGM4StartDelay, () => BGM4Loop, () => BGM4Interval, () => bgm4Routine = null));
         }
     }
 
+    /// <summary>間隔を空けてループするBGM用のAudioSourceを作る</summary>
+    AudioSource CreateIntervalSource(AudioClip clip, float volume)
+    {
+        AudioSource source = gameObject.AddComponent<AudioSource>();
+        source.clip = clip;
+        source.volume = volume;
+        source.loop = false; // 自動ループはOFF（間隔を空けるため）
+        source.playOnAwake = false; // Awake時には再生しない
+        return source;
+    }
+
     /// <summary>
-    /// BGM3を「再生 → 終わったら BGM3Interval 秒待つ → また再生」と繰り返す
-    /// （BGM3Loop がOFFなら1回だけ再生して終わる）
+    /// 「再生 → 終わったら interval 秒待つ → また再生」と繰り返す
+    /// （loop がOFFなら1回だけ再生して終わる）
+    /// loop・interval は毎回Inspectorの値を読むので、再生中の変更も反映される
     /// </summary>
-    IEnumerator PlayBGM3WithInterval(float startDelay)
+    IEnumerator PlayWithInterval(AudioSource source, float startDelay,
+                                 Func<bool> loop, Func<float> interval, Action onFinished)
     {
         if (startDelay > 0f)
         {
@@ -83,24 +114,25 @@ public class TitleSoundManager : MonoBehaviour
 
         while (true)
         {
-            audioSource3.Play();
+            source.Play();
 
             // 再生が終わるまで待つ
-            yield return new WaitWhile(() => audioSource3.isPlaying);
+            yield return new WaitWhile(() => source.isPlaying);
 
             // ループOFFならここで終わり
-            if (!BGM3Loop) break;
+            if (!loop()) break;
 
             // 次の再生まで待つ
-            if (BGM3Interval > 0f)
+            float wait = interval();
+            if (wait > 0f)
             {
-                yield return new WaitForSeconds(BGM3Interval);
+                yield return new WaitForSeconds(wait);
             }
 
             // 待っている間にループOFFにされたら、次は再生しない
-            if (!BGM3Loop) break;
+            if (!loop()) break;
         }
-        bgm3Routine = null;
+        onFinished();
     }
 
     // Update is called once per frame
@@ -110,14 +142,25 @@ public class TitleSoundManager : MonoBehaviour
         UpdateLoopingSource(audioSource1, BGM1Volume, BGM1Loop);
         UpdateLoopingSource(audioSource2, BGM2Volume, BGM2Loop);
 
+        // BGM3：止まっている状態でループONにされたら、間隔を空けて再開する
         if (audioSource3 != null)
         {
             audioSource3.volume = BGM3Volume;
-
-            // 止まっている状態でループONにされたら、間隔を空けて再開する
             if (BGM3Loop && bgm3Routine == null && TitleBGM3 != null && !audioSource3.isPlaying)
             {
-                bgm3Routine = StartCoroutine(PlayBGM3WithInterval(BGM3Interval));
+                bgm3Routine = StartCoroutine(PlayWithInterval(
+                    audioSource3, BGM3Interval, () => BGM3Loop, () => BGM3Interval, () => bgm3Routine = null));
+            }
+        }
+
+        // BGM4：BGM3と同じ
+        if (audioSource4 != null)
+        {
+            audioSource4.volume = BGM4Volume;
+            if (BGM4Loop && bgm4Routine == null && TitleBGM4 != null && !audioSource4.isPlaying)
+            {
+                bgm4Routine = StartCoroutine(PlayWithInterval(
+                    audioSource4, BGM4Interval, () => BGM4Loop, () => BGM4Interval, () => bgm4Routine = null));
             }
         }
     }
